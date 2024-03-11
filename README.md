@@ -4,17 +4,15 @@
 
 Reads the vscode outliner and writes the class api and fields in a file.
 
-### 1.0.0
+### 0.0.1
 
-Initial release of outliner
+Initial release of gathersymbol-0.0.1.vsix, read all the vscode symbol in single file
 
-### 1.0.1
+### 0.0.2
 
-Fixed issue #.
+release of gathersymbol-0.0.2.vsix, read all the vscode symbol in seperate file with name as header file
 
-### 1.1.0
 
-Added features X, Y, and Z.
 
 
 
