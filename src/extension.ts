@@ -119,19 +119,18 @@ export async function activate(context: vscode.ExtensionContext) {
 	// The command has been defined in the package.json file
 	// Now provide the implementation of the command with registerCommand
 	// The commandId parameter must match the command field in package.json
-	let disposable = vscode.commands.registerCommand('outliner.helloWorld', async () => {
+	let disposable = vscode.commands.registerCommand('gathersymbol.helloWorld', async () => {
 
         const headerfiles = await vscode.workspace.findFiles('**/*.h'); 
-        const pathtosave = join("/Users/deepakthapliyal/Workspace/drawio_csv/globalClassDiagram.txt");
+        //const pathtosave = join("/user_data/globalClassDiagram.txt");
         for(const file of headerfiles)
         {
+            clsObjectMap.clear();
             const document = await vscode.workspace.openTextDocument(file);
             //var active = vscode.window.activeTextEditor;
-            //let filePath  =document.fileName as string;
-
-            //const fileNameWithoutExtension = basename(filePath, extname(filePath));
-
-            //const pathtosave = join("/Users/deepakthapliyal/Workspace/drawio_csv/", `${fileNameWithoutExtension}.csv` );
+            let filePath  =document.fileName as string;
+			const fileNameWithoutExtension = basename(filePath, extname(filePath));
+			const pathtosave = join("/Users/deepakthapliyal/Workspace/temp", `${fileNameWithoutExtension}.txt` );
             //console.log(getFunctionList());
 
             const symbolsPromise =  getFunctionList(document.uri);
@@ -162,7 +161,7 @@ export async function activate(context: vscode.ExtensionContext) {
                             data  = data + "+";
                         }
                         data = data  + key + "\n";
-                        syncWriteFile(pathtosave, data);
+                        //syncWriteFile(pathtosave, data);
                     });
                     
                     syncWriteFile(pathtosave, "--\n");
@@ -183,6 +182,7 @@ export async function activate(context: vscode.ExtensionContext) {
                     });
                     
                 }); 
+				syncWriteFile(pathtosave, "\n");
             }
         }
         
@@ -190,6 +190,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
 
 	context.subscriptions.push(disposable);
+    
+}
+
+export async function writeSymbolsToFile(symbolMap: Map<string, vscode.DocumentSymbol[]>) {
+    
     
 }
 

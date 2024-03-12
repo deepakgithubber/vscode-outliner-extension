@@ -12,7 +12,9 @@ Initial release of gathersymbol-0.0.1.vsix, read all the vscode symbol in single
 
 release of gathersymbol-0.0.2.vsix, read all the vscode symbol in seperate file with name as header file
 
+### 0.0.3
 
+Fixed a bug where all the files had all symbols from all the files being read, cleared the data map.
 
 
 
