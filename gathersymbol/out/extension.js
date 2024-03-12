@@ -115,7 +115,7 @@ async function activate(context) {
     let disposable = vscode.commands.registerCommand('gathersymbol.helloWorld', async () => {
         console.log("Current directory:", __dirname);
         var fs = require('fs');
-        var dir = (0, path_1.join)('/user_data/drawio');
+        var dir = '/user_data/drawio';
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });
         }

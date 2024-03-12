@@ -126,7 +126,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
         console.log("Current directory:", __dirname);
         var fs = require('fs');
-        var dir = join('/user_data/drawio');
+        var dir = '/user_data/drawio';
     
         if (!fs.existsSync(dir)){
             fs.mkdirSync(dir, { recursive: true });
