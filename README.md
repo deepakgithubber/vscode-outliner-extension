@@ -16,6 +16,10 @@ release of gathersymbol-0.0.2.vsix, read all the vscode symbol in seperate file 
 
 Fixed a bug where all the files had all symbols from all the files being read, cleared the data map.
 
+### 0.0.4 
+
+Fixed a bug where multiple class format in the single file was not correct.
+Updated output dir path 
 
 
 

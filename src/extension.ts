@@ -1,7 +1,7 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join, basename, extname} from 'path';
 
 
@@ -112,14 +112,31 @@ function readSymbolsRecursivly(symbol: vscode.DocumentSymbol,  clsObject: Map<st
 export async function activate(context: vscode.ExtensionContext) {
 
     const clsObjectMap = new Map<string, classInterface>();
+
 	// Use the console to output diagnostic information (console.log) and errors (console.error)
 	// This line of code will only be executed once when your extension is activated
 	console.log('Congratulations, your extension "outliner" is now active!');
+
+   
 
 	// The command has been defined in the package.json file
 	// Now provide the implementation of the command with registerCommand
 	// The commandId parameter must match the command field in package.json
 	let disposable = vscode.commands.registerCommand('gathersymbol.helloWorld', async () => {
+
+        console.log("Current directory:", __dirname);
+        var fs = require('fs');
+        var dir = join(__dirname,'drawio');
+    
+        if (!fs.existsSync(dir)){
+            fs.mkdirSync(dir, { recursive: true });
+        }
+
+        if(fs.existsSync(dir))
+        {
+            console.log(`created ${dir}`);
+            
+        }
 
         const headerfiles = await vscode.workspace.findFiles('**/*.h'); 
         //const pathtosave = join("/user_data/globalClassDiagram.txt");
@@ -130,7 +147,8 @@ export async function activate(context: vscode.ExtensionContext) {
             //var active = vscode.window.activeTextEditor;
             let filePath  =document.fileName as string;
 			const fileNameWithoutExtension = basename(filePath, extname(filePath));
-			const pathtosave = join("/Users/deepakthapliyal/Workspace/temp", `${fileNameWithoutExtension}.txt` );
+            
+			const pathtosave = join(dir, `${fileNameWithoutExtension}.txt` );
             //console.log(getFunctionList());
 
             const symbolsPromise =  getFunctionList(document.uri);
@@ -146,43 +164,43 @@ export async function activate(context: vscode.ExtensionContext) {
                 let data : string;
                 // // Iterate over the map using forEach
                 clsObjectMap.forEach((value, key) => {
-                    syncWriteFile(pathtosave, value.name + "\n");
+                    syncWriteFile(pathtosave, "\n\n" + value.name);
 
                     value.attribs.forEach((value, key)=>{
                         let data : string= "";
                         if (value == "private")
                         {
-                            data  = data + "-";
+                            data  = data + "\n-";
                         }
                         else if (value == "protected")
                         {
-                        data  = data + "#";
+                            data  = data + "\n#";
                         }else{
-                            data  = data + "+";
+                            data  = data + "\n+";
                         }
-                        data = data  + key + "\n";
+                        data = data  + key;
                         //syncWriteFile(pathtosave, data);
+                        //syncWriteFile(pathtosave, "--\n");
                     });
                     
-                    syncWriteFile(pathtosave, "--\n");
+                    
                     value.funcs.forEach((value, key) =>{
                         let data : string= "";
                         if (value == "private")
                         {
-                            data  = data + "-";
+                            data  = data + "\n-";
                         }
                         else if (value == "protected")
                         {
-                        data  = data + "#";
+                        data  = data + "\n#";
                         }else{
-                            data  = data + "+";
+                            data  = data + "\n+";
                         }
-                        data = data  + key + "\n";
+                        data = data  + key;
                         syncWriteFile(pathtosave, data);
                     });
                     
                 }); 
-				syncWriteFile(pathtosave, "\n");
             }
         }
         
