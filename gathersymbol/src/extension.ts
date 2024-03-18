@@ -156,7 +156,14 @@ export async function activate(context: vscode.ExtensionContext) {
 
         console.log("Current directory:", __dirname);
        
-        var dir = '/Users/deepakthapliyal/Workspace/drawio';
+        let dir  = "";
+        if (fs.existsSync("/user_data"))
+        {
+            dir = '/user_data/drawio';
+        }else{
+            //user defined path
+            dir  = "/Users/deepakthapliyal/Workspace/drawio";
+        }
     
         if (!fs.existsSync(dir)){
             fs.mkdirSync(dir, { recursive: true });
