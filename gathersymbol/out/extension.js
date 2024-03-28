@@ -51,11 +51,26 @@ function syncWriteFile(filename, data) {
     //const contents = readFileSync(filename, 'utf-8');
     //return contents;
 }
-function readSymbolsRecursivlyFromHeader(symbol, srcSymbols, srcfiles, clsObject, clsname) {
+function readSymbolsRecursivlyFromHeader(headerfile, symbol, srcSymbols, srcfiles, clsObject, clsname) {
     if (symbol.kind === vscode.SymbolKind.Class) {
+        const data = readInheritance(headerfile).toString();
+        const lines = data.toString().split("\n");
+        const map = new Map();
+        for (const line of lines) {
+            const [key, value] = line.split(" ");
+            if (key && value) {
+                map.set(key, value);
+            }
+        }
+        //console.log(`header: ${headerfile} data: ${data} base: ${baseCls}`);
         clsname = symbol.name;
         if (!clsObject.has(symbol.name)) {
-            var object = { name: clsname, attribs: new Map(), funcs: new Map() };
+            let basecls = "";
+            if (map.has(clsname)) {
+                basecls = map.get(clsname);
+                console.log(`classname : ${clsname} base: ${basecls}`);
+            }
+            var object = { uuid: (0, uuid_1.v4)(), name: clsname, attribs: new Map(), funcs: new Map(), base: basecls };
             clsObject.set(clsname, object);
         }
     }
@@ -71,7 +86,7 @@ function readSymbolsRecursivlyFromHeader(symbol, srcSymbols, srcfiles, clsObject
         }
     }
     for (const child of symbol.children) {
-        readSymbolsRecursivlyFromHeader(child, srcSymbols, srcfiles, clsObject, clsname);
+        readSymbolsRecursivlyFromHeader(headerfile, child, srcSymbols, srcfiles, clsObject, clsname);
     }
 }
 // Function to read a file asynchronously
@@ -204,6 +219,24 @@ function searchSymbolRecursivelyInSource(symbols, searchSymbol) {
     }
     return -1;
 }
+function getBaseClassConnectionXml(uuid, baseClass, fileObjMap) {
+    let resultXml = "";
+    fileObjMap.forEach((value, key) => {
+        let filename = key;
+        let clssMap = value;
+        clssMap.forEach((value, key) => {
+            if (key === baseClass) {
+                resultXml = `\n<mxCell id="${(0, uuid_1.v4)()}" value="" style="endArrow=block;endSize=10;endFill=0;shadow=0;strokeWidth=1;rounded=0;curved=0;edgeStyle=elbowEdgeStyle;elbow=vertical;" parent="1" source="${uuid}" target="${value.uuid}" edge="1">
+                <mxGeometry width="160" relative="1" as="geometry">
+                <mxPoint x="200" y="203" as="sourcePoint" />
+                <mxPoint x="200" y="203" as="targetPoint" />
+                </mxGeometry>
+                </mxCell>`;
+            }
+        });
+    });
+    return resultXml;
+}
 function getConnectionXml(cls, functionName, sourceUUID, fileObjMap, path) {
     const filePath = (0, path_1.join)(getFileSaveLocation(true), `${functionName}.txt`);
     if (!fs.existsSync(filePath)) {
@@ -214,6 +247,9 @@ function getConnectionXml(cls, functionName, sourceUUID, fileObjMap, path) {
     let foundModuleAtLine = Number.MAX_SAFE_INTEGER;
     let targetUUID = "";
     for (const file of foundFiles) {
+        if (file === path) {
+            continue;
+        }
         const metadata = file.split(':');
         const filePath = metadata[0];
         const foundAtLine = metadata[1];
@@ -241,19 +277,26 @@ function getConnectionXml(cls, functionName, sourceUUID, fileObjMap, path) {
         }
     }
     //console.log(`source id : ${sourceUUID} target id : ${targetUUID}`);
-    let uuid = (0, uuid_1.v4)();
-    let xml = `\n<mxCell id="${uuid}" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="${sourceUUID}" target="${targetUUID}">
-        <mxGeometry relative="1" as="geometry" />
-        </mxCell>`;
-    //await syncWriteFile(path, xml);
+    let xml = "";
+    if (targetUUID) {
+        let uuid = (0, uuid_1.v4)();
+        let xml = `\n<mxCell id="${uuid}" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="${sourceUUID}" target="${targetUUID}">
+            <mxGeometry relative="1" as="geometry" />
+            </mxCell>`;
+    }
     return xml;
 }
-function readSymbols(srcfile, symbolsFromHeader, symbolsFromSource, srcfiles, fileObjMap) {
+function readInheritance(file) {
+    const cmd = `grep -E 'class [A-Za-z0-9_]+ : [A-Za-z0-9_]+|class [A-Za-z0-9_]+ : [A-Za-z0-9_]+[ ]*[,{]' ${file} | awk '{print $2, $5}'`;
+    return (0, child_process_1.execSync)(cmd);
+    //console.log(executeCommand(cmd));
+}
+function readSymbols(headerfile, srcfile, symbolsFromHeader, symbolsFromSource, srcfiles, fileObjMap) {
     //console.log(`readSymbols : source file : ${srcfile}`);
     const clsObjectMap = new Map();
     if (symbolsFromHeader) {
         for (const Symbol of symbolsFromHeader) {
-            readSymbolsRecursivlyFromHeader(Symbol, symbolsFromSource, srcfiles, clsObjectMap, Symbol.name);
+            readSymbolsRecursivlyFromHeader(headerfile, Symbol, symbolsFromSource, srcfiles, clsObjectMap, Symbol.name);
         }
         if (!fileObjMap.has(srcfile)) {
             fileObjMap.set(srcfile, clsObjectMap);
@@ -262,53 +305,166 @@ function readSymbols(srcfile, symbolsFromHeader, symbolsFromSource, srcfiles, fi
 }
 function appendClassXmlDataHeader(fileObjMap, path, xmlConnections) {
     console.log("started executing appendClassXmlDataHeader ....");
+    let classHierarchyMap = new Map();
+    let data = "";
+    fileObjMap.forEach((clsObjMap, filePath) => {
+        clsObjMap.forEach((clsInterfaceObj, className) => {
+            if (clsInterfaceObj.base.trim().length === 0 || clsInterfaceObj.base.startsWith('Q')) {
+                if (!classHierarchyMap.has(className)) {
+                    classHierarchyMap.set(className, [clsInterfaceObj]);
+                }
+                else {
+                    //always at the base class Interface at the top of array
+                    classHierarchyMap.get(className)?.unshift(clsInterfaceObj);
+                }
+            }
+            else {
+                if (!classHierarchyMap.has(clsInterfaceObj.base)) {
+                    classHierarchyMap.set(clsInterfaceObj.base, [clsInterfaceObj]);
+                }
+                else {
+                    classHierarchyMap.get(clsInterfaceObj.base)?.push(clsInterfaceObj);
+                }
+            }
+        });
+    });
+    let nodeXPos = 0;
+    classHierarchyMap.forEach((clsInterfaceObjArray, base) => {
+        let nodeYPos = 300;
+        let idx = 0;
+        console.log(`base : ${base}`);
+        for (const clsInterfaceObj of clsInterfaceObjArray) {
+            console.log(`derived : ${clsInterfaceObj.name}`);
+            // let xPos = 0;
+            // if(idx === 0)
+            // {
+            //     xPos = nodeXPos +  (200 * (clsInterfaceObjArray.length - 1)/2);
+            // }else{
+            //     nodeXPos = nodeXPos + 200;
+            //     xPos = nodeXPos;
+            // }
+            if (base.startsWith('Q')) {
+                appendClassXmlDataHeaderUtil(clsInterfaceObj, fileObjMap, path, xmlConnections, "1", nodeXPos, nodeYPos);
+            }
+            else {
+                appendClassXmlDataHeaderUtil(clsInterfaceObj, fileObjMap, path, xmlConnections, clsInterfaceObjArray[0].uuid, nodeXPos, nodeYPos);
+            }
+            nodeXPos = nodeXPos + 200;
+        }
+    });
+}
+function appendClassXmlDataHeaderUtil(clsInterfaceObj, fileObjMap, path, xmlConnections, baseUUID, nodeXPos, nodeYPos) {
     try {
         let modifiers = new Map([
             ['private', '-'],
             ['protected', '#'],
             ['declaration', '+']
         ]);
-        let data = "";
-        let nodeXPos = 0;
-        fileObjMap.forEach((clsObjMap, fileName) => {
-            let xmlClassContent = "";
-            nodeXPos = nodeXPos + 200;
-            let nodeYPos = 300;
-            console.log(`Reading src : ${fileName} symbols.`);
-            clsObjMap.forEach((value, className) => {
-                console.log(`Reading class : ${className}.`);
-                let y = 26;
-                let parentuuid = (0, uuid_1.v4)();
-                let childCount = 0;
-                let xmlChildContent = "";
-                const childYIncrPos = 26;
-                value.funcs.forEach(async (value, functionName) => {
-                    const formattedValue = formatValueToXml(functionName);
-                    let data = modifiers.get(value[0]) + formattedValue;
-                    let fname = functionName.split("(")[0];
-                    xmlChildContent = xmlChildContent + createXmlTextNode(value[3], parentuuid, data, y, 120, 80);
-                    y = y + childYIncrPos;
-                    childCount = childCount + 1;
-                    const connectionXml = getConnectionXml(className, fname, value[3], fileObjMap, path);
-                    if (connectionXml) {
-                        xmlConnections.push(connectionXml);
-                    }
-                    //xmlChildContent = xmlChildContent + connectionXml ;
-                });
-                let h = childYIncrPos * (childCount + 1);
-                let valueFormatted = formatValueToXml(value.name);
-                xmlClassContent = xmlClassContent + createXmlListNode(parentuuid, valueFormatted, nodeXPos, nodeYPos, 160, h);
-                xmlClassContent = xmlClassContent + xmlChildContent;
-                nodeYPos = nodeYPos + (childCount * 80);
-            });
-            syncWriteFile(path, xmlClassContent); // Writing content to file
+        let y = 26;
+        let parentuuid = clsInterfaceObj.uuid;
+        let childCount = 0;
+        let xmlChildContent = "";
+        const childYIncrPos = 26;
+        let xmlClassContent = "";
+        clsInterfaceObj.funcs.forEach(async (value, functionName) => {
+            const formattedValue = formatValueToXml(functionName);
+            let data = modifiers.get(value[0]) + formattedValue;
+            let fname = functionName.split("(")[0];
+            const connectionXML = getConnectionXml(clsInterfaceObj.name, fname, value[3], fileObjMap, path);
+            let fontColor = "";
+            if (connectionXML === " ") {
+                fontColor = "#FF333";
+            }
+            xmlChildContent = xmlChildContent + createXmlTextNode(value[3], parentuuid, data, y, 120, 80, fontColor);
+            y = y + childYIncrPos;
+            childCount = childCount + 1;
+            //xmlChildContent = xmlChildContent + connectionXml ;
         });
+        if (clsInterfaceObj.uuid !== baseUUID) {
+            const connectionXML = `\n<mxCell id="${(0, uuid_1.v4)()}" value="" style="endArrow=block;endSize=10;endFill=0;shadow=0;strokeWidth=1;rounded=0;curved=0;edgeStyle=elbowEdgeStyle;elbow=vertical;" parent="1" source="${clsInterfaceObj.uuid}" target="${baseUUID}" edge="1">
+            <mxGeometry width="160" relative="1" as="geometry">
+            <mxPoint x="${nodeXPos}" y="${nodeYPos}" as="sourcePoint" />
+            <mxPoint x="${nodeXPos}" y="${nodeYPos - (childCount * 80)}" as="targetPoint" />
+            </mxGeometry>
+            </mxCell>`;
+            //getBaseClassConnectionXml(parentuuid,clsInterfaceObj.base, fileObjMap);
+            if (connectionXML) {
+                xmlConnections.push(connectionXML);
+            }
+        }
+        else {
+            //set the y pos of derived class below the base class
+            nodeYPos = nodeYPos + (childCount * 80);
+        }
+        let h = childYIncrPos * (childCount + 1);
+        let valueFormatted = formatValueToXml(clsInterfaceObj.name);
+        xmlClassContent = xmlClassContent + createXmlListNode(parentuuid, valueFormatted, nodeXPos, nodeYPos, 160, h);
+        xmlClassContent = xmlClassContent + xmlChildContent;
+        syncWriteFile(path, xmlClassContent); // Writing content to file
     }
     catch (error) {
-        //console.error('Error appending class XML data:', error);
+        console.error('Error appending class XML data:', error);
     }
-    console.log("end executing appendClassXmlDataHeader ....");
 }
+// function appendClassXmlDataHeader(fileObjMap: Map<string, Map<string, classInterface>>, path: string, xmlConnections: string[]) 
+// {
+//     console.log("started executing appendClassXmlDataHeader ....");
+//     try 
+//     {
+//         let modifiers = new Map([
+//             ['private', '-'],
+//             ['protected', '#'],
+//             ['declaration', '+']
+//         ]);
+//         let data : string = "";
+//         let nodeXPos = 0;
+//         let baseNodeXPos = 0;
+//         fileObjMap.forEach((clsObjMap, filePath)=>{   
+//             let xmlClassContent = "";
+//             nodeXPos = nodeXPos + 200;
+//             let nodeYPos = 600;
+//             let baseNodeYPos = 0;
+//             console.log(`Reading src : ${filePath} symbols.`);
+//             clsObjMap.forEach((value, className) => {
+//                 console.log(`Reading class : ${className}.`);
+//                 let y               = 26;
+//                 let parentuuid      = value.uuid;
+//                 let baseCls         = value.base;
+//                 let childCount      = 0;
+//                 let xmlChildContent = "";
+//                 const childYIncrPos = 26;
+//                 value.funcs.forEach(async (value, functionName) => {
+//                     const formattedValue = formatValueToXml(functionName);
+//                     let data = modifiers.get(value[0]) + formattedValue;
+//                     let fname = functionName.split("(")[0];
+//                     const connectionXml = getConnectionXml(className, fname, value[3], fileObjMap, filePath);
+//                     let fontColor: string = "";
+//                    if (connectionXML === " "){
+//                        fontColor = "#FF333";
+//                    }
+//                    xmlChildContent = xmlChildContent + createXmlTextNode(value[3],parentuuid, data, y, 120, 80, fontColor);
+//                     y = y + childYIncrPos;
+//                     childCount = childCount + 1;
+//                     //xmlChildContent = xmlChildContent + connectionXml ;
+//                 });
+//                 let h = childYIncrPos * (childCount + 1);
+//                 let valueFormatted = formatValueToXml(value.name);
+//                 xmlClassContent = xmlClassContent + createXmlListNode(parentuuid, valueFormatted, nodeXPos, nodeYPos, 160, h);
+//                 xmlClassContent = xmlClassContent + xmlChildContent;
+//                 nodeYPos = nodeYPos + (childCount * 80);
+//                 const connectionXML = getBaseClassConnectionXml(parentuuid, baseCls, fileObjMap);
+//                 if(connectionXML)
+//                 {
+//                     xmlConnections.push(connectionXML);
+//                 }
+//             });
+//             syncWriteFile(path, xmlClassContent); // Writing content to file
+//         });
+//     } catch (error) {
+//         //console.error('Error appending class XML data:', error);
+//     }
+//     console.log("end executing appendClassXmlDataHeader ....");
+// }
 function getXmlHeaderContent() {
     let uuid = (0, uuid_1.v4)();
     let xmlHeaderContent = `<mxfile host="app.diagrams.net" modified="2024-03-15T04:23:59.069Z" agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36" version="24.0.2" etag="aks6HkVxmZ68ohly_puq" type="device">
@@ -319,10 +475,17 @@ function getXmlHeaderContent() {
         <mxCell id="1" parent="0" />`;
     return xmlHeaderContent;
 }
-function createXmlTextNode(uuid, parentuuid, data, ypos, width, height) {
-    return `\n<mxCell id= "${uuid}" value="${data}" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;" vertex="1" parent="${parentuuid}">
-                        <mxGeometry y="${ypos}" width="${width}" height="${height}" as="geometry"/>
-                        </mxCell>`;
+function createXmlTextNode(uuid, parentuuid, data, ypos, width, height, fontColor) {
+    if (fontColor !== "") {
+        return `\n<mxCell id= "${uuid}" value="${data}" style="text;fontColor:${fontColor};strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;" vertex="1" parent="${parentuuid}">
+            <mxGeometry y="${ypos}" width="${width}" height="${height}" as="geometry"/>
+            </mxCell>`;
+    }
+    else {
+        return `\n<mxCell id= "${uuid}" value="${data}" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;" vertex="1" parent="${parentuuid}">
+                    <mxGeometry y="${ypos}" width="${width}" height="${height}" as="geometry"/>
+                    </mxCell>`;
+    }
 }
 function createXmlListNode(uuid, data, xpos, ypos, width, height) {
     return `\n<mxCell id ="${uuid}" value="${data}" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;" vertex="1" parent="1">
@@ -375,9 +538,10 @@ function activate(context) {
             const filePath = document.fileName;
             const fileNameWithoutExtension = (0, path_1.basename)(filePath, (0, path_1.extname)(filePath));
             const fileWithoutSlotsKey = ReplaceQtSlots(document, getFileSaveLocation());
+            console.log(getFunctionList(fileWithoutSlotsKey));
             const symbolsPromiseFromHeaders = await getFunctionList(fileWithoutSlotsKey);
             const symbolsPromiseFromSource = await getFunctionList(pair[1]);
-            readSymbols(pair[1].path, symbolsPromiseFromHeaders, symbolsPromiseFromSource, sourcefiles, fileObjMap);
+            readSymbols(pair[0].path, pair[1].path, symbolsPromiseFromHeaders, symbolsPromiseFromSource, sourcefiles, fileObjMap);
             //Check if the file exists
             if (fs.existsSync((fileWithoutSlotsKey).path)) {
                 // Delete the file

@@ -10,9 +10,12 @@ import { stdout } from 'process';
 import { dir } from 'console';
 import { serialize } from 'v8';
 
+
 interface classInterface
 {
     name: string;
+    base: string;
+    uuid: string;
     attribs: Map<string, any>;
     funcs: Map<string, [string, number, string, string]>;
 }
@@ -42,14 +45,35 @@ function syncWriteFile(filename: string, data: any) {
     //return contents;
   }
 
-function readSymbolsRecursivlyFromHeader(symbol: vscode.DocumentSymbol, srcSymbols:vscode.DocumentSymbol[] , srcfiles: vscode.Uri[],clsObject: Map<string, classInterface>, clsname: string)
+function readSymbolsRecursivlyFromHeader(headerfile: string, symbol: vscode.DocumentSymbol, srcSymbols:vscode.DocumentSymbol[] , srcfiles: vscode.Uri[],clsObject: Map<string, classInterface>, clsname: string)
 { 
+   
+
     if(symbol.kind === vscode.SymbolKind.Class)
     {
+        const data = readInheritance(headerfile).toString();
+        const lines = data.toString().split("\n");
+        const map = new Map<string, string>(); 
+        for(const line of lines)
+        {
+            const [key, value] = line.split(" ");
+            if(key && value)
+            {
+                map.set(key, value);
+            } 
+        }
+        //console.log(`header: ${headerfile} data: ${data} base: ${baseCls}`);
+
         clsname = symbol.name;
         if(!clsObject.has(symbol.name))
         {
-            var object:  classInterface = {name : clsname, attribs:new Map<string, any>(), funcs : new Map<string,any>()};
+            let basecls: string = "";
+            if(map.has(clsname))
+            {
+                basecls = map.get(clsname) as string;
+                console.log(`classname : ${clsname} base: ${basecls}`);
+            }
+            var object:  classInterface = {uuid: uuidv4(), name : clsname, attribs:new Map<string, any>(), funcs : new Map<string,any>(), base: basecls};
             clsObject.set(clsname, object);
         }
     }
@@ -63,7 +87,9 @@ function readSymbolsRecursivlyFromHeader(symbol: vscode.DocumentSymbol, srcSymbo
 
             let line  = searchSymbolRecursivelyInSource(srcSymbols, symbol);
             let metadata : [string, number, string, string] = [details[0], line, "None", uuid];
+            
             clsObject.get(clsname)?.funcs.set(symbol.name, metadata);
+
 
             searchTextInFilesSync(fname, srcfiles);
         }
@@ -71,7 +97,7 @@ function readSymbolsRecursivlyFromHeader(symbol: vscode.DocumentSymbol, srcSymbo
 
     for(const child of symbol.children)
     {
-        readSymbolsRecursivlyFromHeader(child, srcSymbols, srcfiles, clsObject, clsname);
+        readSymbolsRecursivlyFromHeader(headerfile, child, srcSymbols, srcfiles, clsObject, clsname);
     }
 }
 
@@ -230,6 +256,31 @@ function searchSymbolRecursivelyInSource(symbols: vscode.DocumentSymbol[], searc
 
 }
 
+function getBaseClassConnectionXml(uuid: string, baseClass:string, fileObjMap: Map<string, Map<string, classInterface>>)
+{
+    let resultXml :string = "";
+    fileObjMap.forEach((value, key) =>{
+        let filename = key;
+        let clssMap = value;
+
+        clssMap.forEach((value, key) =>{
+
+            if(key === baseClass)
+            {
+                resultXml =  `\n<mxCell id="${uuidv4()}" value="" style="endArrow=block;endSize=10;endFill=0;shadow=0;strokeWidth=1;rounded=0;curved=0;edgeStyle=elbowEdgeStyle;elbow=vertical;" parent="1" source="${uuid}" target="${value.uuid}" edge="1">
+                <mxGeometry width="160" relative="1" as="geometry">
+                <mxPoint x="200" y="203" as="sourcePoint" />
+                <mxPoint x="200" y="203" as="targetPoint" />
+                </mxGeometry>
+                </mxCell>`;
+            }
+        });
+    });
+
+    return resultXml;
+
+}
+
 function getConnectionXml(cls: string, functionName: string, sourceUUID: string, fileObjMap: Map<string, Map<string, classInterface>>, path: string)
 {
     const filePath = join(getFileSaveLocation(true), `${functionName}.txt`);
@@ -242,6 +293,8 @@ function getConnectionXml(cls: string, functionName: string, sourceUUID: string,
 
     for(const file of foundFiles)
     {
+        if (file === path) { continue;}
+
         const metadata      = file.split(':');
         const filePath      = metadata[0];
         const foundAtLine   = metadata[1];
@@ -275,17 +328,26 @@ function getConnectionXml(cls: string, functionName: string, sourceUUID: string,
 
     //console.log(`source id : ${sourceUUID} target id : ${targetUUID}`);
 
-    let uuid = uuidv4();
-    let xml = `\n<mxCell id="${uuid}" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="${sourceUUID}" target="${targetUUID}">
-        <mxGeometry relative="1" as="geometry" />
-        </mxCell>`;
+    let xml : string  = "";
+    if(targetUUID){
+        let uuid = uuidv4();
+        let xml = `\n<mxCell id="${uuid}" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="${sourceUUID}" target="${targetUUID}">
+            <mxGeometry relative="1" as="geometry" />
+            </mxCell>`;
+    }
 
-    //await syncWriteFile(path, xml);
     return xml;
 
 }
 
-function readSymbols(srcfile: string,symbolsFromHeader: vscode.DocumentSymbol[], symbolsFromSource: vscode.DocumentSymbol[],srcfiles: vscode.Uri[],fileObjMap: Map<string, Map<string, classInterface>>)
+function readInheritance(file: string) 
+{
+    const cmd = `grep -E 'class [A-Za-z0-9_]+ : [A-Za-z0-9_]+|class [A-Za-z0-9_]+ : [A-Za-z0-9_]+[ ]*[,{]' ${file} | awk '{print $2, $5}'`;
+    return execSync(cmd);
+    //console.log(executeCommand(cmd));
+}
+
+function readSymbols(headerfile: string, srcfile: string, symbolsFromHeader: vscode.DocumentSymbol[], symbolsFromSource: vscode.DocumentSymbol[],srcfiles: vscode.Uri[],fileObjMap: Map<string, Map<string, classInterface>>)
 {
 
     //console.log(`readSymbols : source file : ${srcfile}`);
@@ -295,8 +357,7 @@ function readSymbols(srcfile: string,symbolsFromHeader: vscode.DocumentSymbol[],
     {
         for(const Symbol of symbolsFromHeader)
         {
-            readSymbolsRecursivlyFromHeader(Symbol, symbolsFromSource, srcfiles, clsObjectMap, Symbol.name);
-            
+            readSymbolsRecursivlyFromHeader(headerfile, Symbol, symbolsFromSource, srcfiles, clsObjectMap, Symbol.name);   
         }
 
         if(!fileObjMap.has(srcfile))
@@ -306,66 +367,231 @@ function readSymbols(srcfile: string,symbolsFromHeader: vscode.DocumentSymbol[],
     }
 }
 
-function appendClassXmlDataHeader(fileObjMap: Map<string, Map<string, classInterface>>, path: string, xmlConnections: string[]) {
+function appendClassXmlDataHeader(fileObjMap: Map<string, Map<string, classInterface>>, path: string, xmlConnections: string[])
+{
+
     console.log("started executing appendClassXmlDataHeader ....");
-    try {
+    let classHierarchyMap   = new Map<string, classInterface[]>();
+    let data: string        = "";
+    
+    fileObjMap.forEach((clsObjMap, filePath)=>
+    {   
+        clsObjMap.forEach((clsInterfaceObj, className) => {
+            
+            if(clsInterfaceObj.base.trim().length === 0 || clsInterfaceObj.base.startsWith('Q'))
+            {
+                if(!classHierarchyMap.has(className))
+                { 
+                    classHierarchyMap.set(className, [clsInterfaceObj]);
+                }
+                else{
+                    //always at the base class Interface at the top of array
+                    classHierarchyMap.get(className)?.unshift(clsInterfaceObj);
+                }
+            }
+            else{
+                if(!classHierarchyMap.has(clsInterfaceObj.base))
+                {
+                    classHierarchyMap.set(clsInterfaceObj.base, [clsInterfaceObj]);
+                }else{
+                    classHierarchyMap.get(clsInterfaceObj.base)?.push(clsInterfaceObj);
+                }
+            }
+        });
+    });
+
+
+    let nodeXPos: number    = 0;
+    classHierarchyMap.forEach((clsInterfaceObjArray, base) =>{
+
+        let nodeYPos = 300;
+        let idx:  number =  0;
+        console.log(`base : ${base}`);
+        for(const clsInterfaceObj of clsInterfaceObjArray)
+        {
+            console.log(`derived : ${clsInterfaceObj.name}`);
+            // let xPos = 0;
+            // if(idx === 0)
+            // {
+            //     xPos = nodeXPos +  (200 * (clsInterfaceObjArray.length - 1)/2);
+            // }else{
+            //     nodeXPos = nodeXPos + 200;
+            //     xPos = nodeXPos;
+            // }
+
+            if(base.startsWith('Q'))
+            {
+                appendClassXmlDataHeaderUtil(clsInterfaceObj, fileObjMap, path, xmlConnections,"1", nodeXPos, nodeYPos);
+            }else{
+                appendClassXmlDataHeaderUtil(clsInterfaceObj, fileObjMap, path, xmlConnections, clsInterfaceObjArray[0].uuid, nodeXPos, nodeYPos);
+            }
+            nodeXPos =  nodeXPos + 200;
+
+        }
+    });
+
+
+
+}
+
+function appendClassXmlDataHeaderUtil(clsInterfaceObj: classInterface, fileObjMap: Map<string, Map<string, classInterface>>, path: string, xmlConnections: string[], baseUUID: string, nodeXPos: number,nodeYPos:number)
+{
+    try 
+    {
         let modifiers = new Map([
             ['private', '-'],
             ['protected', '#'],
             ['declaration', '+']
         ]);
 
-        
-        let data : string = "";
-        let nodeXPos = 0;
-        fileObjMap.forEach((clsObjMap, fileName)=>{   
-            let xmlClassContent = "";
-            nodeXPos = nodeXPos + 200;
-            let nodeYPos = 300;
-            console.log(`Reading src : ${fileName} symbols.`);
-            clsObjMap.forEach((value, className) => {
-                console.log(`Reading class : ${className}.`);
-                let y               = 26;
-                let parentuuid      = uuidv4();
-                let childCount      = 0;
-                let xmlChildContent = "";
-                const childYIncrPos = 26;
+        let y               = 26;
+        let parentuuid      = clsInterfaceObj.uuid;
+        let childCount      = 0;
+        let xmlChildContent = "";
+        const childYIncrPos = 26;
+        let xmlClassContent = "";
 
-                value.funcs.forEach(async (value, functionName) => {
-                    const formattedValue = formatValueToXml(functionName);
-                    let data = modifiers.get(value[0]) + formattedValue;
-                    let fname = functionName.split("(")[0];
+        clsInterfaceObj.funcs.forEach(async (value, functionName) => {
+            const formattedValue = formatValueToXml(functionName);
+            let data = modifiers.get(value[0]) + formattedValue;
+            let fname = functionName.split("(")[0];
 
-                    xmlChildContent = xmlChildContent + createXmlTextNode(value[3],parentuuid, data, y, 120, 80);
-                    y = y + childYIncrPos;
-                    childCount = childCount + 1;
-
-                    const connectionXml = getConnectionXml(className, fname, value[3], fileObjMap, path);
-                    if(connectionXml)
-                    {
-                        xmlConnections.push(connectionXml);
-                    }
-                    //xmlChildContent = xmlChildContent + connectionXml ;
-                });
-
-                let h = childYIncrPos * (childCount + 1);
-                let valueFormatted = formatValueToXml(value.name);
-
-                xmlClassContent = xmlClassContent + createXmlListNode(parentuuid, valueFormatted, nodeXPos, nodeYPos, 160, h);
-                
-                xmlClassContent = xmlClassContent + xmlChildContent;
-
-                nodeYPos = nodeYPos + (childCount * 80);
-            });
+            const connectionXML = getConnectionXml(clsInterfaceObj.name, fname, value[3], fileObjMap, path);
             
-            syncWriteFile(path, xmlClassContent); // Writing content to file
+            let fontColor: string = "";
+            if (connectionXML === " "){
+                fontColor = "#FF333";
+            }
+
+            xmlChildContent = xmlChildContent + createXmlTextNode(value[3],parentuuid, data, y, 120, 80, fontColor);
+
+            y = y + childYIncrPos;
+            childCount = childCount + 1;
+
+            //xmlChildContent = xmlChildContent + connectionXml ;
         });
-    } catch (error) {
-        //console.error('Error appending class XML data:', error);
+
+        if(clsInterfaceObj.uuid !== baseUUID)
+        {
+            const connectionXML = `\n<mxCell id="${uuidv4()}" value="" style="endArrow=block;endSize=10;endFill=0;shadow=0;strokeWidth=1;rounded=0;curved=0;edgeStyle=elbowEdgeStyle;elbow=vertical;" parent="1" source="${clsInterfaceObj.uuid}" target="${baseUUID}" edge="1">
+            <mxGeometry width="160" relative="1" as="geometry">
+            <mxPoint x="${nodeXPos}" y="${nodeYPos}" as="sourcePoint" />
+            <mxPoint x="${nodeXPos}" y="${nodeYPos - (childCount *80)}" as="targetPoint" />
+            </mxGeometry>
+            </mxCell>`;
+            //getBaseClassConnectionXml(parentuuid,clsInterfaceObj.base, fileObjMap);
+            if(connectionXML)
+            {
+                xmlConnections.push(connectionXML);
+            }
+
+            
+        }else
+        {
+            //set the y pos of derived class below the base class
+            nodeYPos = nodeYPos + (childCount * 80);
+        }
+
+        let h = childYIncrPos * (childCount + 1);
+        let valueFormatted = formatValueToXml(clsInterfaceObj.name);
+
+        xmlClassContent = xmlClassContent + createXmlListNode(parentuuid, valueFormatted, nodeXPos, nodeYPos, 160, h);
+        
+        xmlClassContent = xmlClassContent + xmlChildContent;
+
+        syncWriteFile(path, xmlClassContent); // Writing content to file
+
+    }
+    catch(error)
+    {
+        console.error('Error appending class XML data:', error);
     }
 
-    console.log("end executing appendClassXmlDataHeader ....");
 }
+
+
+// function appendClassXmlDataHeader(fileObjMap: Map<string, Map<string, classInterface>>, path: string, xmlConnections: string[]) 
+// {
+//     console.log("started executing appendClassXmlDataHeader ....");
+//     try 
+//     {
+//         let modifiers = new Map([
+//             ['private', '-'],
+//             ['protected', '#'],
+//             ['declaration', '+']
+//         ]);
+
+        
+        
+//         let data : string = "";
+//         let nodeXPos = 0;
+        
+//         let baseNodeXPos = 0;
+//         fileObjMap.forEach((clsObjMap, filePath)=>{   
+//             let xmlClassContent = "";
+//             nodeXPos = nodeXPos + 200;
+    
+//             let nodeYPos = 600;
+//             let baseNodeYPos = 0;
+//             console.log(`Reading src : ${filePath} symbols.`);
+//             clsObjMap.forEach((value, className) => {
+//                 console.log(`Reading class : ${className}.`);
+//                 let y               = 26;
+//                 let parentuuid      = value.uuid;
+//                 let baseCls         = value.base;
+//                 let childCount      = 0;
+//                 let xmlChildContent = "";
+//                 const childYIncrPos = 26;
+
+//                 value.funcs.forEach(async (value, functionName) => {
+//                     const formattedValue = formatValueToXml(functionName);
+//                     let data = modifiers.get(value[0]) + formattedValue;
+//                     let fname = functionName.split("(")[0];
+
+//                     const connectionXml = getConnectionXml(className, fname, value[3], fileObjMap, filePath);
+                    
+//                     let fontColor: string = "";
+//                    if (connectionXML === " "){
+//                        fontColor = "#FF333";
+//                    }
+
+//                    xmlChildContent = xmlChildContent + createXmlTextNode(value[3],parentuuid, data, y, 120, 80, fontColor);
+
+//                     y = y + childYIncrPos;
+//                     childCount = childCount + 1;
+
+//                     //xmlChildContent = xmlChildContent + connectionXml ;
+//                 });
+
+//                 let h = childYIncrPos * (childCount + 1);
+//                 let valueFormatted = formatValueToXml(value.name);
+
+            
+//                 xmlClassContent = xmlClassContent + createXmlListNode(parentuuid, valueFormatted, nodeXPos, nodeYPos, 160, h);
+                
+//                 xmlClassContent = xmlClassContent + xmlChildContent;
+
+//                 nodeYPos = nodeYPos + (childCount * 80);
+
+//                 const connectionXML = getBaseClassConnectionXml(parentuuid, baseCls, fileObjMap);
+//                 if(connectionXML)
+//                 {
+//                     xmlConnections.push(connectionXML);
+//                 }
+
+               
+//             });
+
+           
+            
+//             syncWriteFile(path, xmlClassContent); // Writing content to file
+//         });
+//     } catch (error) {
+//         //console.error('Error appending class XML data:', error);
+//     }
+
+//     console.log("end executing appendClassXmlDataHeader ....");
+// }
 
 function getXmlHeaderContent()
 {
@@ -380,13 +606,20 @@ function getXmlHeaderContent()
     return xmlHeaderContent;
 }
 
-function createXmlTextNode(uuid: string, parentuuid:string, data: string, ypos: number, width: number,height: number)
+function createXmlTextNode(uuid: string, parentuuid:string, data: string, ypos: number, width: number,height: number, fontColor: string)
 {
-    
-    return `\n<mxCell id= "${uuid}" value="${data}" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;" vertex="1" parent="${parentuuid}">
-                        <mxGeometry y="${ypos}" width="${width}" height="${height}" as="geometry"/>
-                        </mxCell>`;    
-
+    if(fontColor !== "")
+    {
+        return `\n<mxCell id= "${uuid}" value="${data}" style="text;fontColor:${fontColor};strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;" vertex="1" parent="${parentuuid}">
+            <mxGeometry y="${ypos}" width="${width}" height="${height}" as="geometry"/>
+            </mxCell>`;    
+    }
+    else
+    {
+        return `\n<mxCell id= "${uuid}" value="${data}" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;" vertex="1" parent="${parentuuid}">
+                    <mxGeometry y="${ypos}" width="${width}" height="${height}" as="geometry"/>
+                    </mxCell>`;    
+    }
 }
 
 function createXmlListNode(uuid: string, data: string, xpos: number, ypos: number, width: number,height: number)
@@ -458,10 +691,12 @@ export function activate(context: vscode.ExtensionContext) {
             const fileNameWithoutExtension = basename(filePath, extname(filePath));
             const fileWithoutSlotsKey = ReplaceQtSlots(document, getFileSaveLocation());
         
+            console.log(getFunctionList(fileWithoutSlotsKey));
+
             const symbolsPromiseFromHeaders = await getFunctionList(fileWithoutSlotsKey);
             const symbolsPromiseFromSource = await getFunctionList(pair[1]);
         
-            readSymbols(pair[1].path, symbolsPromiseFromHeaders as vscode.DocumentSymbol[], symbolsPromiseFromSource as vscode.DocumentSymbol[], sourcefiles, fileObjMap);
+            readSymbols(pair[0].path, pair[1].path, symbolsPromiseFromHeaders as vscode.DocumentSymbol[], symbolsPromiseFromSource as vscode.DocumentSymbol[], sourcefiles, fileObjMap);
 
             //Check if the file exists
             if (fs.existsSync((fileWithoutSlotsKey).path)) {
