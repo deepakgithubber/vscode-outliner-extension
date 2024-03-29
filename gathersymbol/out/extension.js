@@ -365,17 +365,22 @@ function appendClassXmlDataHeaderUtil(clsInterfaceObj, fileObjMap, path, xmlConn
         let childCount = 0;
         let xmlChildContent = "";
         const childYIncrPos = 26;
+        const textNodeWidth = 35;
         let xmlClassContent = "";
+        let maxDataWidth = -1;
         clsInterfaceObj.funcs.forEach(async (value, functionName) => {
             const formattedValue = formatValueToXml(functionName);
             let data = modifiers.get(value[0]) + formattedValue;
             let fname = functionName.split("(")[0];
+            if (data.length > maxDataWidth) {
+                maxDataWidth = data.length;
+            }
             const connectionXML = getConnectionXml(clsInterfaceObj.name, fname, value[3], fileObjMap, path);
             let fontColor = "";
             if (connectionXML === " ") {
                 fontColor = "#FF333";
             }
-            xmlChildContent = xmlChildContent + createXmlTextNode(value[3], parentuuid, data, y, 120, 80, fontColor);
+            xmlChildContent = xmlChildContent + createXmlTextNode(value[3], parentuuid, data, y, data.length * 10, textNodeWidth, fontColor);
             y = y + childYIncrPos;
             childCount = childCount + 1;
             //xmlChildContent = xmlChildContent + connectionXml ;
@@ -384,7 +389,7 @@ function appendClassXmlDataHeaderUtil(clsInterfaceObj, fileObjMap, path, xmlConn
             const connectionXML = `\n<mxCell id="${(0, uuid_1.v4)()}" value="" style="endArrow=block;endSize=10;endFill=0;shadow=0;strokeWidth=1;rounded=0;curved=0;edgeStyle=elbowEdgeStyle;elbow=vertical;" parent="1" source="${clsInterfaceObj.uuid}" target="${baseUUID}" edge="1">
             <mxGeometry width="160" relative="1" as="geometry">
             <mxPoint x="${nodeXPos}" y="${nodeYPos}" as="sourcePoint" />
-            <mxPoint x="${nodeXPos}" y="${nodeYPos - (childCount * 80)}" as="targetPoint" />
+            <mxPoint x="${nodeXPos}" y="${nodeYPos - (childCount * textNodeWidth)}" as="targetPoint" />
             </mxGeometry>
             </mxCell>`;
             //getBaseClassConnectionXml(parentuuid,clsInterfaceObj.base, fileObjMap);
@@ -394,11 +399,11 @@ function appendClassXmlDataHeaderUtil(clsInterfaceObj, fileObjMap, path, xmlConn
         }
         else {
             //set the y pos of derived class below the base class
-            nodeYPos = nodeYPos + (childCount * 80);
+            nodeYPos = nodeYPos - (childCount * textNodeWidth);
         }
         let h = childYIncrPos * (childCount + 1);
         let valueFormatted = formatValueToXml(clsInterfaceObj.name);
-        xmlClassContent = xmlClassContent + createXmlListNode(parentuuid, valueFormatted, nodeXPos, nodeYPos, 160, h);
+        xmlClassContent = xmlClassContent + createXmlListNode(parentuuid, valueFormatted, nodeXPos, nodeYPos, maxDataWidth * 10, h);
         xmlClassContent = xmlClassContent + xmlChildContent;
         syncWriteFile(path, xmlClassContent); // Writing content to file
     }
@@ -476,7 +481,7 @@ function getXmlHeaderContent() {
     return xmlHeaderContent;
 }
 function createXmlTextNode(uuid, parentuuid, data, ypos, width, height, fontColor) {
-    if (fontColor !== "") {
+    if (fontColor.trim().length === 0) {
         return `\n<mxCell id= "${uuid}" value="${data}" style="text;fontColor:${fontColor};strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;" vertex="1" parent="${parentuuid}">
             <mxGeometry y="${ypos}" width="${width}" height="${height}" as="geometry"/>
             </mxCell>`;
@@ -514,7 +519,7 @@ function findSimilarPairs(headerFiles, sourceFiles) {
 // Your extension is activated the very first time the command is executed
 function activate(context) {
     const fileObjMap = new Map();
-    const pathtosave = (0, path_1.join)(getFileSaveLocation(), `jigsaw_headers.drawio`);
+    const pathtosave = (0, path_1.join)(getFileSaveLocation(), `dneg-jigsaw.drawio`);
     // Use the console to output diagnostic information (console.log) and errors (console.error)
     // This line of code will only be executed once when your extension is activated
     //console.log('Congratulations, your extension "outliner" is now active!');
@@ -524,6 +529,8 @@ function activate(context) {
     let disposable = vscode.commands.registerCommand('gathersymbol.helloWorld', async () => {
         const headerfiles = await vscode.workspace.findFiles('**/*.h');
         const sourcefiles = await vscode.workspace.findFiles('**/*.cpp');
+        const pythonfiles = await vscode.workspace.findFiles('**/*.py');
+        console.log(`python files: ${pythonfiles}`);
         const header_source_pair = findSimilarPairs(headerfiles, sourcefiles);
         //console.log(`pair: ${header_source_pair}`);
         let xmlFooterContent = ` 
@@ -533,6 +540,7 @@ function activate(context) {
             </mxfile>`;
         let xmlClassContent = "";
         let xmlConnections = [];
+        let symbolsPromiseFromSource;
         for (const pair of header_source_pair) {
             const document = await vscode.workspace.openTextDocument(pair[0]);
             const filePath = document.fileName;
@@ -551,6 +559,14 @@ function activate(context) {
             else {
                 //console.log('File does not exist.');
             }
+        }
+        for (const file of pythonfiles) {
+            const document = await vscode.workspace.openTextDocument(file);
+            //const filePath                  = document.fileName as string;
+            //const fileNameWithoutExtension  = basename(filePath, extname(filePath));
+            //const fileWithoutSlotsKey       = ReplaceQtSlots(document, getFileSaveLocation());
+            const symbols = await getFunctionList(document.uri);
+            readSymbols(document.uri.path, document.uri.path, symbols, symbols, sourcefiles, fileObjMap);
         }
         syncWriteFile(pathtosave, getXmlHeaderContent());
         appendClassXmlDataHeader(fileObjMap, pathtosave, xmlConnections);
