@@ -190,7 +190,7 @@ async function searchTextInFiles(searchString: string, sourcefiles: vscode.Uri[]
             const directoryPath = vscode.Uri.joinPath(src, '..').fsPath;
             if(!visited.has(directoryPath))
             {
-                const command = `grep -rn "${searchString}" ${directoryPath}`;
+                const command = `grep -rnw "${searchString}" ${directoryPath}`;
                 //setTimeout(() => {
                     exec(command, (error, stdout, stderr) => {
                         if (error) {
@@ -296,7 +296,10 @@ function getConnectionXml(cls: string, functionName: string, sourceUUID: string,
 
     let searchResult = fs.readFileSync(filePath);
     let foundFiles = searchResult.toString().split('\n');
-    let foundModuleAtLine : number = Number.MAX_SAFE_INTEGER;
+
+    return foundFiles.length;
+    
+    /*let foundModuleAtLine : number = Number.MAX_SAFE_INTEGER;
     let targetUUID = ""; 
 
     for(const file of foundFiles)
@@ -345,6 +348,7 @@ function getConnectionXml(cls: string, functionName: string, sourceUUID: string,
     }
 
     return xml;
+    */
 
 }
 
@@ -417,14 +421,11 @@ function appendClassXmlDataHeader(fileObjMap: Map<string, Map<string, classInter
                 let derivedClasses =  classHierarchyMap.get(baseClassInterfaceObj.name) as classInterface[];
                 nodeYPos = nodeYPos + ( attribCounts * textNodeHeight);
                 nodeYPos = nodeYPos < 0? -nodeXPos : nodeYPos;
-
-                console.log(`derived Node y pos: ${nodeYPos}`);
                 if(derivedClasses.length)
                 {
                     for(const derived of derivedClasses)
                     {
                         //set the y pos of derived class below the base class
-                        console.log(`Drawing derived : ${derived.name}`);
                         appendClassXmlDataHeaderUtil(derived, fileObjMap, path, baseClassInterfaceObj.uuid, nodeXPos, nodeYPos);
                         xmlConnections.push(createBaseDerivedConnectionXml(derived.uuid, baseClassInterfaceObj.uuid, nodeXPos, nodeYPos, textNodeHeight, maxAttribCount) );
                         nodeXPos =  nodeXPos + 350;
@@ -466,9 +467,10 @@ function appendClassXmlDataHeaderUtil(clsInterfaceObj: classInterface, fileObjMa
             let data = modifiers.get(value[0]) + formattedValue;
             let fname = functionName.split("(")[0];
            
-            const connectionXML = getConnectionXml(clsInterfaceObj.name, fname, value[3], fileObjMap, path);
+            const foundAtLines = getConnectionXml(clsInterfaceObj.name, fname, value[3], fileObjMap, path) as number;
             let fontColor: string = "";
-            if (connectionXML === " "){
+            console.log(`api : ${fname} found count : ${foundAtLines}`);
+            if (foundAtLines === 0){
                 fontColor = "#FF333";
             }
 
@@ -623,18 +625,11 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }
 
-
         for( const file of pythonfiles)
         {
             const document                  = await vscode.workspace.openTextDocument(file);
-            //const filePath                  = document.fileName as string;
-            //const fileNameWithoutExtension  = basename(filePath, extname(filePath));
-            //const fileWithoutSlotsKey       = ReplaceQtSlots(document, getFileSaveLocation());
-        
             const symbols = await getFunctionList(document.uri) as vscode.DocumentSymbol[];
-
             readSymbols(document.uri.path, document.uri.path, symbols as vscode.DocumentSymbol[], symbols as vscode.DocumentSymbol[], sourcefiles, fileObjMap);
-
         }
 
         syncWriteFile(pathtosave, getXmlHeaderContent());

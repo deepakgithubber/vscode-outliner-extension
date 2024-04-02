@@ -162,7 +162,7 @@ async function searchTextInFiles(searchString, sourcefiles) {
         const searchPromises = sourcefiles.map(async (src) => {
             const directoryPath = vscode.Uri.joinPath(src, '..').fsPath;
             if (!visited.has(directoryPath)) {
-                const command = `grep -rn "${searchString}" ${directoryPath}`;
+                const command = `grep -rnw "${searchString}" ${directoryPath}`;
                 //setTimeout(() => {
                 (0, child_process_1.exec)(command, (error, stdout, stderr) => {
                     if (error) {
@@ -246,26 +246,32 @@ function getConnectionXml(cls, functionName, sourceUUID, fileObjMap, path) {
     }
     let searchResult = fs.readFileSync(filePath);
     let foundFiles = searchResult.toString().split('\n');
-    let foundModuleAtLine = Number.MAX_SAFE_INTEGER;
+    return foundFiles.length;
+    /*let foundModuleAtLine : number = Number.MAX_SAFE_INTEGER;
     let targetUUID = "";
-    for (const file of foundFiles) {
-        if (file === path) {
-            continue;
-        }
-        const metadata = file.split(':');
-        const filePath = metadata[0];
-        const foundAtLine = metadata[1];
-        if (foundAtLine === "undefined") {
-            continue;
-        }
-        if (fileObjMap.has(filePath)) {
+
+    for(const file of foundFiles)
+    {
+        if (file === path) { continue;}
+
+        const metadata      = file.split(':');
+        const filePath      = metadata[0];
+        const foundAtLine   = metadata[1];
+
+        if (foundAtLine === "undefined") {continue;}
+
+        if(fileObjMap.has(filePath))
+        {
             let clsInterfaceObj = fileObjMap.get(filePath);
-            clsInterfaceObj?.forEach((value, key) => {
-                if (key !== cls) {
-                    value.funcs.forEach(async (value, key) => {
-                        let moduleAtLine = value[1];
-                        if (moduleAtLine < parseInt(foundAtLine)) {
-                            if (foundModuleAtLine > moduleAtLine) {
+            clsInterfaceObj?.forEach((value, key) =>{
+                if(key !== cls)
+                {
+                    value.funcs.forEach(async (value, key) =>{
+                        let moduleAtLine  = value[1];
+                        if(moduleAtLine < parseInt(foundAtLine))
+                        {
+                            if(foundModuleAtLine > moduleAtLine)
+                            {
                                 foundModuleAtLine = moduleAtLine;
                                 targetUUID = value[3];
                             }
@@ -274,19 +280,23 @@ function getConnectionXml(cls, functionName, sourceUUID, fileObjMap, path) {
                 }
             });
         }
-        else {
+        else{
             //console.log(`map does not have the key : `, filePath);
         }
     }
+
     //console.log(`source id : ${sourceUUID} target id : ${targetUUID}`);
-    let xml = "";
-    if (targetUUID) {
-        let uuid = (0, uuid_1.v4)();
+
+    let xml : string  = "";
+    if(targetUUID){
+        let uuid = uuidv4();
         let xml = `\n<mxCell id="${uuid}" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="${sourceUUID}" target="${targetUUID}">
             <mxGeometry relative="1" as="geometry" />
             </mxCell>`;
     }
+
     return xml;
+    */
 }
 function readInheritance(file) {
     const cmd = `grep -E 'class [A-Za-z0-9_]+ : [A-Za-z0-9_]+|class [A-Za-z0-9_]+ : [A-Za-z0-9_]+[ ]*[,{]' ${file} | awk '{print $2, $5}'`;
@@ -333,11 +343,9 @@ function appendClassXmlDataHeader(fileObjMap, path, xmlConnections) {
                 let derivedClasses = classHierarchyMap.get(baseClassInterfaceObj.name);
                 nodeYPos = nodeYPos + (attribCounts * textNodeHeight);
                 nodeYPos = nodeYPos < 0 ? -nodeXPos : nodeYPos;
-                console.log(`derived Node y pos: ${nodeYPos}`);
                 if (derivedClasses.length) {
                     for (const derived of derivedClasses) {
                         //set the y pos of derived class below the base class
-                        console.log(`Drawing derived : ${derived.name}`);
                         appendClassXmlDataHeaderUtil(derived, fileObjMap, path, baseClassInterfaceObj.uuid, nodeXPos, nodeYPos);
                         xmlConnections.push(createBaseDerivedConnectionXml(derived.uuid, baseClassInterfaceObj.uuid, nodeXPos, nodeYPos, textNodeHeight, maxAttribCount));
                         nodeXPos = nodeXPos + 350;
@@ -371,9 +379,10 @@ function appendClassXmlDataHeaderUtil(clsInterfaceObj, fileObjMap, path, baseUUI
             const formattedValue = formatValueToXml(functionName);
             let data = modifiers.get(value[0]) + formattedValue;
             let fname = functionName.split("(")[0];
-            const connectionXML = getConnectionXml(clsInterfaceObj.name, fname, value[3], fileObjMap, path);
+            const foundAtLines = getConnectionXml(clsInterfaceObj.name, fname, value[3], fileObjMap, path);
             let fontColor = "";
-            if (connectionXML === " ") {
+            console.log(`api : ${fname} found count : ${foundAtLines}`);
+            if (foundAtLines === 0) {
                 fontColor = "#FF333";
             }
             xmlChildContent = xmlChildContent + createXmlTextNode(value[3], clsInterfaceObj.uuid, data, y, data.length * units, textNodeHeight, fontColor);
@@ -491,9 +500,6 @@ function activate(context) {
         }
         for (const file of pythonfiles) {
             const document = await vscode.workspace.openTextDocument(file);
-            //const filePath                  = document.fileName as string;
-            //const fileNameWithoutExtension  = basename(filePath, extname(filePath));
-            //const fileWithoutSlotsKey       = ReplaceQtSlots(document, getFileSaveLocation());
             const symbols = await getFunctionList(document.uri);
             readSymbols(document.uri.path, document.uri.path, symbols, symbols, sourcefiles, fileObjMap);
         }
