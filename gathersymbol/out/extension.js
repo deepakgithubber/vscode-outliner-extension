@@ -62,13 +62,15 @@ function readSymbolsRecursivlyFromHeader(headerfile, symbol, srcSymbols, srcfile
                 map.set(key, value);
             }
         }
-        //console.log(`header: ${headerfile} data: ${data} base: ${baseCls}`);
         clsname = symbol.name;
         if (!clsObject.has(symbol.name)) {
-            let basecls = "";
+            let basecls = "Global";
             if (map.has(clsname)) {
                 basecls = map.get(clsname);
                 console.log(`classname : ${clsname} base: ${basecls}`);
+                if (!basecls || (basecls.trim().length === 0) || basecls.startsWith('Q')) {
+                    basecls = "Global";
+                }
             }
             var object = { uuid: (0, uuid_1.v4)(), name: clsname, attribs: new Map(), funcs: new Map(), base: basecls };
             clsObject.set(clsname, object);
@@ -309,51 +311,49 @@ function appendClassXmlDataHeader(fileObjMap, path, xmlConnections) {
     let data = "";
     fileObjMap.forEach((clsObjMap, filePath) => {
         clsObjMap.forEach((clsInterfaceObj, className) => {
-            if (clsInterfaceObj.base.trim().length === 0 || clsInterfaceObj.base.startsWith('Q')) {
-                if (!classHierarchyMap.has(className)) {
-                    classHierarchyMap.set(className, [clsInterfaceObj]);
-                }
-                else {
-                    //always at the base class Interface at the top of array
-                    classHierarchyMap.get(className)?.unshift(clsInterfaceObj);
-                }
+            if (!classHierarchyMap.has(clsInterfaceObj.base)) {
+                classHierarchyMap.set(clsInterfaceObj.base, [clsInterfaceObj]);
             }
             else {
-                if (!classHierarchyMap.has(clsInterfaceObj.base)) {
-                    classHierarchyMap.set(clsInterfaceObj.base, [clsInterfaceObj]);
-                }
-                else {
-                    classHierarchyMap.get(clsInterfaceObj.base)?.push(clsInterfaceObj);
-                }
+                classHierarchyMap.get(clsInterfaceObj.base)?.push(clsInterfaceObj);
             }
         });
     });
     let nodeXPos = 0;
-    classHierarchyMap.forEach((clsInterfaceObjArray, base) => {
-        let nodeYPos = 300;
-        let idx = 0;
-        console.log(`base : ${base}`);
-        for (const clsInterfaceObj of clsInterfaceObjArray) {
-            console.log(`derived : ${clsInterfaceObj.name}`);
-            // let xPos = 0;
-            // if(idx === 0)
-            // {
-            //     xPos = nodeXPos +  (200 * (clsInterfaceObjArray.length - 1)/2);
-            // }else{
-            //     nodeXPos = nodeXPos + 200;
-            //     xPos = nodeXPos;
-            // }
-            if (base.startsWith('Q')) {
-                appendClassXmlDataHeaderUtil(clsInterfaceObj, fileObjMap, path, xmlConnections, "1", nodeXPos, nodeYPos);
+    const textNodeHeight = 35;
+    let maxAttribCount = -1;
+    if (classHierarchyMap.has("Global")) {
+        let baseClassInterfaceArray = classHierarchyMap.get("Global");
+        for (const baseClassInterfaceObj of baseClassInterfaceArray) {
+            let nodeYPos = 50;
+            console.log(`Base: ${baseClassInterfaceObj.name}`);
+            console.log(`Base Node y pos: ${nodeYPos}`);
+            const attribCounts = appendClassXmlDataHeaderUtil(baseClassInterfaceObj, fileObjMap, path, baseClassInterfaceObj.uuid, nodeXPos, nodeYPos);
+            if (classHierarchyMap.has(baseClassInterfaceObj.name)) {
+                let derivedClasses = classHierarchyMap.get(baseClassInterfaceObj.name);
+                nodeYPos = nodeYPos + (attribCounts * textNodeHeight);
+                nodeYPos = nodeYPos < 0 ? -nodeXPos : nodeYPos;
+                console.log(`derived Node y pos: ${nodeYPos}`);
+                if (derivedClasses.length) {
+                    for (const derived of derivedClasses) {
+                        //set the y pos of derived class below the base class
+                        console.log(`Drawing derived : ${derived.name}`);
+                        appendClassXmlDataHeaderUtil(derived, fileObjMap, path, baseClassInterfaceObj.uuid, nodeXPos, nodeYPos);
+                        xmlConnections.push(createBaseDerivedConnectionXml(derived.uuid, baseClassInterfaceObj.uuid, nodeXPos, nodeYPos, textNodeHeight, maxAttribCount));
+                        nodeXPos = nodeXPos + 350;
+                    }
+                }
+                else {
+                    nodeXPos = nodeXPos + 350;
+                }
             }
             else {
-                appendClassXmlDataHeaderUtil(clsInterfaceObj, fileObjMap, path, xmlConnections, clsInterfaceObjArray[0].uuid, nodeXPos, nodeYPos);
+                nodeXPos = nodeXPos + 350;
             }
-            nodeXPos = nodeXPos + 200;
         }
-    });
+    }
 }
-function appendClassXmlDataHeaderUtil(clsInterfaceObj, fileObjMap, path, xmlConnections, baseUUID, nodeXPos, nodeYPos) {
+function appendClassXmlDataHeaderUtil(clsInterfaceObj, fileObjMap, path, baseUUID, nodeXPos, nodeYPos) {
     try {
         let modifiers = new Map([
             ['private', '-'],
@@ -361,115 +361,44 @@ function appendClassXmlDataHeaderUtil(clsInterfaceObj, fileObjMap, path, xmlConn
             ['declaration', '+']
         ]);
         let y = 26;
-        let parentuuid = clsInterfaceObj.uuid;
-        let childCount = 0;
+        let attribCounts = 0;
         let xmlChildContent = "";
         const childYIncrPos = 26;
-        const textNodeWidth = 35;
+        const textNodeHeight = 35;
         let xmlClassContent = "";
-        let maxDataWidth = -1;
+        let units = 7;
         clsInterfaceObj.funcs.forEach(async (value, functionName) => {
             const formattedValue = formatValueToXml(functionName);
             let data = modifiers.get(value[0]) + formattedValue;
             let fname = functionName.split("(")[0];
-            if (data.length > maxDataWidth) {
-                maxDataWidth = data.length;
-            }
             const connectionXML = getConnectionXml(clsInterfaceObj.name, fname, value[3], fileObjMap, path);
             let fontColor = "";
             if (connectionXML === " ") {
                 fontColor = "#FF333";
             }
-            xmlChildContent = xmlChildContent + createXmlTextNode(value[3], parentuuid, data, y, data.length * 10, textNodeWidth, fontColor);
+            xmlChildContent = xmlChildContent + createXmlTextNode(value[3], clsInterfaceObj.uuid, data, y, data.length * units, textNodeHeight, fontColor);
             y = y + childYIncrPos;
-            childCount = childCount + 1;
-            //xmlChildContent = xmlChildContent + connectionXml ;
+            attribCounts = attribCounts + 1;
         });
-        if (clsInterfaceObj.uuid !== baseUUID) {
-            const connectionXML = `\n<mxCell id="${(0, uuid_1.v4)()}" value="" style="endArrow=block;endSize=10;endFill=0;shadow=0;strokeWidth=1;rounded=0;curved=0;edgeStyle=elbowEdgeStyle;elbow=vertical;" parent="1" source="${clsInterfaceObj.uuid}" target="${baseUUID}" edge="1">
-            <mxGeometry width="160" relative="1" as="geometry">
-            <mxPoint x="${nodeXPos}" y="${nodeYPos}" as="sourcePoint" />
-            <mxPoint x="${nodeXPos}" y="${nodeYPos - (childCount * textNodeWidth)}" as="targetPoint" />
-            </mxGeometry>
-            </mxCell>`;
-            //getBaseClassConnectionXml(parentuuid,clsInterfaceObj.base, fileObjMap);
-            if (connectionXML) {
-                xmlConnections.push(connectionXML);
-            }
-        }
-        else {
-            //set the y pos of derived class below the base class
-            nodeYPos = nodeYPos - (childCount * textNodeWidth);
-        }
-        let h = childYIncrPos * (childCount + 1);
+        let h = childYIncrPos * (attribCounts + 1);
         let valueFormatted = formatValueToXml(clsInterfaceObj.name);
-        xmlClassContent = xmlClassContent + createXmlListNode(parentuuid, valueFormatted, nodeXPos, nodeYPos, maxDataWidth * 10, h);
+        xmlClassContent = xmlClassContent + createXmlListNode(clsInterfaceObj.uuid, valueFormatted, nodeXPos, nodeYPos, 300, h);
         xmlClassContent = xmlClassContent + xmlChildContent;
         syncWriteFile(path, xmlClassContent); // Writing content to file
+        return attribCounts;
     }
     catch (error) {
         console.error('Error appending class XML data:', error);
     }
 }
-// function appendClassXmlDataHeader(fileObjMap: Map<string, Map<string, classInterface>>, path: string, xmlConnections: string[]) 
-// {
-//     console.log("started executing appendClassXmlDataHeader ....");
-//     try 
-//     {
-//         let modifiers = new Map([
-//             ['private', '-'],
-//             ['protected', '#'],
-//             ['declaration', '+']
-//         ]);
-//         let data : string = "";
-//         let nodeXPos = 0;
-//         let baseNodeXPos = 0;
-//         fileObjMap.forEach((clsObjMap, filePath)=>{   
-//             let xmlClassContent = "";
-//             nodeXPos = nodeXPos + 200;
-//             let nodeYPos = 600;
-//             let baseNodeYPos = 0;
-//             console.log(`Reading src : ${filePath} symbols.`);
-//             clsObjMap.forEach((value, className) => {
-//                 console.log(`Reading class : ${className}.`);
-//                 let y               = 26;
-//                 let parentuuid      = value.uuid;
-//                 let baseCls         = value.base;
-//                 let childCount      = 0;
-//                 let xmlChildContent = "";
-//                 const childYIncrPos = 26;
-//                 value.funcs.forEach(async (value, functionName) => {
-//                     const formattedValue = formatValueToXml(functionName);
-//                     let data = modifiers.get(value[0]) + formattedValue;
-//                     let fname = functionName.split("(")[0];
-//                     const connectionXml = getConnectionXml(className, fname, value[3], fileObjMap, filePath);
-//                     let fontColor: string = "";
-//                    if (connectionXML === " "){
-//                        fontColor = "#FF333";
-//                    }
-//                    xmlChildContent = xmlChildContent + createXmlTextNode(value[3],parentuuid, data, y, 120, 80, fontColor);
-//                     y = y + childYIncrPos;
-//                     childCount = childCount + 1;
-//                     //xmlChildContent = xmlChildContent + connectionXml ;
-//                 });
-//                 let h = childYIncrPos * (childCount + 1);
-//                 let valueFormatted = formatValueToXml(value.name);
-//                 xmlClassContent = xmlClassContent + createXmlListNode(parentuuid, valueFormatted, nodeXPos, nodeYPos, 160, h);
-//                 xmlClassContent = xmlClassContent + xmlChildContent;
-//                 nodeYPos = nodeYPos + (childCount * 80);
-//                 const connectionXML = getBaseClassConnectionXml(parentuuid, baseCls, fileObjMap);
-//                 if(connectionXML)
-//                 {
-//                     xmlConnections.push(connectionXML);
-//                 }
-//             });
-//             syncWriteFile(path, xmlClassContent); // Writing content to file
-//         });
-//     } catch (error) {
-//         //console.error('Error appending class XML data:', error);
-//     }
-//     console.log("end executing appendClassXmlDataHeader ....");
-// }
+function createBaseDerivedConnectionXml(sourceUUID, targetUUID, nodeXPos, nodeYPos, textNodeHeight, attribCounts) {
+    return `\n<mxCell id="${(0, uuid_1.v4)()}" value="" style="endArrow=block;endSize=10;endFill=0;shadow=0;strokeWidth=1;rounded=0;curved=0;edgeStyle=elbowEdgeStyle;elbow=vertical;" parent="1" source="${sourceUUID}" target="${targetUUID}" edge="1">
+            <mxGeometry width="160" relative="1" as="geometry">
+            <mxPoint x="${nodeXPos}" y="${nodeYPos}" as="sourcePoint" />
+            <mxPoint x="${nodeXPos}" y="${nodeYPos - (attribCounts * textNodeHeight)}" as="targetPoint" />
+            </mxGeometry>
+            </mxCell>`;
+}
 function getXmlHeaderContent() {
     let uuid = (0, uuid_1.v4)();
     let xmlHeaderContent = `<mxfile host="app.diagrams.net" modified="2024-03-15T04:23:59.069Z" agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36" version="24.0.2" etag="aks6HkVxmZ68ohly_puq" type="device">
