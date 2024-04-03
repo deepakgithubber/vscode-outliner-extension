@@ -242,11 +242,14 @@ function getBaseClassConnectionXml(uuid, baseClass, fileObjMap) {
 function getConnectionXml(cls, functionName, sourceUUID, fileObjMap, path) {
     const filePath = (0, path_1.join)(getFileSaveLocation(true), `${functionName}.txt`);
     if (!fs.existsSync(filePath)) {
-        return;
+        return 0;
     }
     let searchResult = fs.readFileSync(filePath);
-    let foundFiles = searchResult.toString().split('\n');
-    return foundFiles.length;
+    if (searchResult) {
+        let foundFiles = searchResult.toString().split('\n');
+        return foundFiles.length;
+    }
+    return 0;
     /*let foundModuleAtLine : number = Number.MAX_SAFE_INTEGER;
     let targetUUID = "";
 
@@ -369,10 +372,10 @@ function appendClassXmlDataHeaderUtil(clsInterfaceObj, fileObjMap, path, baseUUI
             ['declaration', '+']
         ]);
         let y = 26;
-        let attribCounts = 0;
-        let xmlChildContent = "";
         const childYIncrPos = 26;
         const textNodeHeight = 35;
+        let attribCounts = 0;
+        let xmlChildContent = "";
         let xmlClassContent = "";
         let units = 7;
         clsInterfaceObj.funcs.forEach(async (value, functionName) => {
