@@ -469,14 +469,21 @@ function appendClassXmlDataHeaderUtil(clsInterfaceObj: classInterface, fileObjMa
 
         clsInterfaceObj.funcs.forEach(async (value, functionName) => {
             const formattedValue = formatValueToXml(functionName);
-            let data = modifiers.get(value[0]) + formattedValue;
+
+            let data: string  = "";
+            if(modifiers.has(value[0])){
+                data = modifiers.get(value[0]) + formattedValue;
+            }else{
+                data = formattedValue;
+            }
             let fname = functionName.split("(")[0];
            
             const foundAtLines = getConnectionXml(clsInterfaceObj.name, fname, value[3], fileObjMap, path) as number;
             let fontColor: string = "";
-            console.log(`api : ${fname} found count : ${foundAtLines}`);
+            
             if (foundAtLines === 0){
-                fontColor = "#FF333";
+                console.log(`api : ${fname} found count : ${foundAtLines}`);
+                fontColor = "#FF0000";
             }
 
             xmlChildContent = xmlChildContent + createXmlTextNode(value[3],clsInterfaceObj.uuid, data, y, data.length * units, textNodeHeight, fontColor);
@@ -500,7 +507,6 @@ function appendClassXmlDataHeaderUtil(clsInterfaceObj: classInterface, fileObjMa
     }
 }
 
-
 function createBaseDerivedConnectionXml(sourceUUID: string, targetUUID: string, nodeXPos: number, nodeYPos: number, textNodeHeight: number, attribCounts: number)
 {
     return `\n<mxCell id="${uuidv4()}" value="" style="endArrow=block;endSize=10;endFill=0;shadow=0;strokeWidth=1;rounded=0;curved=0;edgeStyle=elbowEdgeStyle;elbow=vertical;" parent="1" source="${sourceUUID}" target="${targetUUID}" edge="1">
@@ -510,7 +516,6 @@ function createBaseDerivedConnectionXml(sourceUUID: string, targetUUID: string, 
             </mxGeometry>
             </mxCell>`;
 }
-
 
 function getXmlHeaderContent()
 {
@@ -529,16 +534,15 @@ function createXmlTextNode(uuid: string, parentuuid:string, data: string, ypos: 
 {
     if(fontColor.trim().length === 0)
     {
-        return `\n<mxCell id= "${uuid}" value="${data}" style="text;fontColor:${fontColor};strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;" vertex="1" parent="${parentuuid}">
+        return `\n<mxCell id= "${uuid}" value="${data}" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;" vertex="1" parent="${parentuuid}">
             <mxGeometry y="${ypos}" width="${width}" height="${height}" as="geometry"/>
             </mxCell>`;    
     }
-    else
-    {
-        return `\n<mxCell id= "${uuid}" value="${data}" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;" vertex="1" parent="${parentuuid}">
-                    <mxGeometry y="${ypos}" width="${width}" height="${height}" as="geometry"/>
-                    </mxCell>`;    
-    }
+  
+    return `\n<mxCell id= "${uuid}" value="${data}" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontColor=${fontColor};" vertex="1" parent="${parentuuid}">
+                <mxGeometry y="${ypos}" width="${width}" height="${height}" as="geometry"/>
+                </mxCell>`;    
+    
 }
 
 function createXmlListNode(uuid: string, data: string, xpos: number, ypos: number, width: number,height: number)
