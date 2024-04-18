@@ -31,6 +31,24 @@ const fs = __importStar(require("fs"));
 const path_1 = require("path");
 const uuid_1 = require("uuid");
 const child_process_1 = require("child_process");
+let pyQt5Data = new Map();
+pyQt5Data.set('PyQt5.QtCore', ['QAbstractAnimation', 'QAbstractEventDispatcher', 'QAbstractItemModel', 'QAbstractListModel', 'QAbstractProxyModel', 'QAbstractState', 'QAbstractTableModel', 'QAbstractTransition', 'QAnimationGroup', 'QIODevice', 'QBuffer', 'QChildEvent', 'QConcatenateTablesProxyModel', 'QCoreApplication', 'QDynamicPropertyChangeEvent', 'QEventLoop', 'QEventTransition', 'QFileDevice', 'QFile', 'QFileSelector', 'QFileSystemWatcher', 'QFinalState', 'QHistoryState', 'QIdentityProxyModel', 'QItemSelectionModel', 'QLibrary', 'QMimeData', 'QObjectCleanupHandler', 'QParallelAnimationGroup', 'QPauseAnimation', 'QPluginLoader', 'QProcess', 'QVariantAnimation', 'QPropertyAnimation', 'QSaveFile', 'QSequentialAnimationGroup', 'QSettings', 'QSharedMemory', 'QSignalMapper', 'QSignalTransition', 'QSocketNotifier', 'QSortFilterProxyModel', 'QState', 'QStateMachine', 'QStringListModel', 'QTemporaryFile', 'QThread', 'QThreadPool', 'QTimeLine', 'QTimer', 'QTimerEvent', 'QTranslator', 'QTransposeProxyModel']);
+pyQt5Data.set('PyQt5.QtWidgets', ['QAbstractButton', 'QAbstractGraphicsShapeItem', 'QFrame', 'QAbstractScrollArea', 'QAbstractItemView', 'QAbstractSlider', 'QAbstractSpinBox', 'QLayout', 'QBoxLayout', 'QCalendarWidget', 'QCheckBox', 'QDialog', 'QColorDialog', 'QColumnView', 'QComboBox', 'QPushButton', 'QCommandLinkButton', 'QCommonStyle', 'QDateTimeEdit', 'QDateEdit', 'QDesktopWidget', 'QDial', 'QDialogButtonBox', 'QDockWidget', 'QDoubleSpinBox', 'QErrorMessage', 'QFileDialog', 'QFocusFrame', 'QFontComboBox', 'QFontDialog', 'QFormLayout', 'QGraphicsLayout', 'QGraphicsAnchorLayout', 'QGraphicsBlurEffect', 'QGraphicsColorizeEffect', 'QGraphicsDropShadowEffect', 'QGraphicsEllipseItem', 'QGraphicsGridLayout', 'QGraphicsItemGroup', 'QGraphicsLineItem', 'QGraphicsLinearLayout', 'QGraphicsObject', 'QGraphicsOpacityEffect', 'QGraphicsPathItem', 'QGraphicsPixmapItem', 'QGraphicsPolygonItem', 'QGraphicsWidget', 'QGraphicsWidget', 'QGraphicsProxyWidget', 'QGraphicsRectItem', 'QGraphicsRotation', 'QGraphicsScale', 'QGraphicsSceneContextMenuEvent', 'QGraphicsSceneDragDropEvent', 'QGraphicsSceneHelpEvent', 'QGraphicsSceneHoverEvent', 'QGraphicsSceneMouseEvent', 'QGraphicsSceneMoveEvent', 'QGraphicsSceneResizeEvent', 'QGraphicsSceneWheelEvent', 'QGraphicsSimpleTextItem', 'QGraphicsTextItem', 'QGraphicsView', 'QGridLayout', 'QGroupBox', 'QHBoxLayout', 'QHeaderView', 'QInputDialog', 'QItemDelegate', 'QKeySequenceEdit', 'QLCDNumber', 'QLabel', 'QLineEdit', 'QListView', 'QListWidget', 'QMacCocoaViewContainer', 'QMainWindow', 'QMdiArea', 'QMdiSubWindow', 'QMenu', 'QMenuBar', 'QMessageBox', 'QOpenGLWidget', 'QPanGesture', 'QPinchGesture', 'QPlainTextEdit', 'QProgressBar', 'QProgressDialog', 'QProxyStyle', 'QRadioButton', 'QRubberBand', 'QScrollArea', 'QScrollBar', 'QSizeGrip', 'QSlider', 'QSpacerItem', 'QSpinBox', 'QSplashScreen', 'QSplitter', 'QSplitterHandle', 'QStackedLayout', 'QStackedWidget', 'QStatusBar', 'QStyleHintReturnMask', 'QStyleHintReturnVariant', 'QStyleOptionButton', 'QStyleOptionComplex', 'QStyleOptionComboBox', 'QStyleOptionDockWidget', 'QStyleOptionFocusRect', 'QStyleOptionFrame', 'QStyleOptionGraphicsItem', 'QStyleOptionGroupBox', 'QStyleOptionHeader', 'QStyleOptionMenuItem', 'QStyleOptionProgressBar', 'QStyleOptionRubberBand', 'QStyleOptionSizeGrip', 'QStyleOptionSlider', 'QStyleOptionSpinBox', 'QStyleOptionTab', 'QStyleOptionTabBarBase', 'QStyleOptionTabV4', 'QStyleOptionTabWidgetFrame', 'QStyleOptionTitleBar', 'QStyleOptionToolBar', 'QStyleOptionToolBox', 'QStyleOptionToolButton', 'QStyleOptionViewItem', 'QStyledItemDelegate', 'QSwipeGesture', 'QTabBar', 'QTabWidget', 'QTableView', 'QTableWidget', 'QTapAndHoldGesture', 'QTapGesture', 'QTextEdit', 'QTextBrowser', 'QTimeEdit', 'QToolBar', 'QToolBox', 'QToolButton', 'QTreeView', 'QTreeWidget', 'QUndoView', 'QVBoxLayout', 'QWidgetAction', 'QWidgetItem', 'QWizard', 'QWizardPage']);
+pyQt5Data.set('PyQt5.QtNetwork', ['QNetworkDiskCache', 'QTcpSocket', 'QSslSocket', 'QUdpSocket']);
+pyQt5Data.set('PyQt5.QtPrintSupport', ['QPrintDialog']);
+pyQt5Data.set('PyQt5.QtSql', ['QSqlIndex', 'QSqlTableModel', 'QSqlRelationalTableModel']);
+pyQt5Data.set('PyQt5.QtXml', ['QDomAttr', 'QDomCharacterData', 'QDomText', 'QDomCDATASection', 'QDomComment', 'QDomDocument', 'QDomDocumentFragment', 'QDomDocumentType', 'QDomElement', 'QDomEntity', 'QDomEntityReference', 'QDomNotation', 'QDomProcessingInstruction', 'QXmlDefaultHandler', 'QXmlDefaultHandler', 'QXmlDefaultHandler', 'QXmlDefaultHandler', 'QXmlDefaultHandler', 'QXmlDefaultHandler', 'QXmlSimpleReader']);
+function findModuleByClass(className) {
+    for (const moduleName in pyQt5Data) {
+        if (pyQt5Data.hasOwnProperty(moduleName)) {
+            const classes = pyQt5Data.get(moduleName);
+            if (classes.includes(className)) {
+                return moduleName;
+            }
+        }
+    }
+    return undefined;
+}
 // Async function to fetch employee data
 async function getFunctionList(uri) {
     return await new Promise((resolve, reject) => {
@@ -71,20 +89,8 @@ function readSymbolsRecursivlyFromHeader(headerfile, symbol, srcSymbols, srcfile
             if (map.has(clsname)) {
                 basecls = map.get(clsname);
                 if (basecls.startsWith('Q')) {
-                    gatherQtAPIModuleName(clsname);
-                    const sleepTime = 5000;
-                    const startTime = Date.now();
-                    let currentTime = startTime;
-                    while (currentTime - startTime < sleepTime) {
-                        currentTime = Date.now();
-                    }
-                    if (fs.existsSync((0, path_1.join)(getFileSaveLocation(true), 'class_' + clsname + '.txt'))) {
-                        module = fs.readFileSync((0, path_1.join)(getFileSaveLocation(true), 'class_' + clsname + '.txt')).toString();
-                        if (!module) {
-                            module = "Core";
-                        }
-                        //console.log(`module name for the class ${basecls} is ${module}`);
-                    }
+                    module = gatherQtAPIModuleName(clsname);
+                    console.log(`cls name ${clsname} module ${module}`);
                     fillcolor = "#FF0000";
                 }
                 if (!basecls || (basecls.trim().length === 0) || basecls.startsWith('Q')) {
@@ -594,7 +600,9 @@ function getModulePythonScript() {
 import inspect
 import sys
 
-from PyQt5 import QtCore, QtWidgets, QtNetwork, QtPrintSupport, QtSql, QtSvg, QtXml
+
+modulelist  = {'PyQt5.QtCore': ['QAbstractAnimation', 'QAbstractEventDispatcher', 'QAbstractItemModel', 'QAbstractListModel', 'QAbstractProxyModel', 'QAbstractState', 'QAbstractTableModel', 'QAbstractTransition', 'QAnimationGroup', 'QIODevice', 'QBuffer', 'QChildEvent', 'QConcatenateTablesProxyModel', 'QCoreApplication', 'QDynamicPropertyChangeEvent', 'QEventLoop', 'QEventTransition', 'QFileDevice', 'QFile', 'QFileSelector', 'QFileSystemWatcher', 'QFinalState', 'QHistoryState', 'QIdentityProxyModel', 'QItemSelectionModel', 'QLibrary', 'QMimeData', 'QObjectCleanupHandler', 'QParallelAnimationGroup', 'QPauseAnimation', 'QPluginLoader', 'QProcess', 'QVariantAnimation', 'QPropertyAnimation', 'QSaveFile', 'QSequentialAnimationGroup', 'QSettings', 'QSharedMemory', 'QSignalMapper', 'QSignalTransition', 'QSocketNotifier', 'QSortFilterProxyModel', 'QState', 'QStateMachine', 'QStringListModel', 'QTemporaryFile', 'QThread', 'QThreadPool', 'QTimeLine', 'QTimer', 'QTimerEvent', 'QTranslator', 'QTransposeProxyModel'], 'PyQt5.QtWidgets': ['QAbstractButton', 'QAbstractGraphicsShapeItem', 'QFrame', 'QAbstractScrollArea', 'QAbstractItemView', 'QAbstractSlider', 'QAbstractSpinBox', 'QLayout', 'QBoxLayout', 'QCalendarWidget', 'QCheckBox', 'QDialog', 'QColorDialog', 'QColumnView', 'QComboBox', 'QPushButton', 'QCommandLinkButton', 'QCommonStyle', 'QDateTimeEdit', 'QDateEdit', 'QDesktopWidget', 'QDial', 'QDialogButtonBox', 'QDockWidget', 'QDoubleSpinBox', 'QErrorMessage', 'QFileDialog', 'QFocusFrame', 'QFontComboBox', 'QFontDialog', 'QFormLayout', 'QGraphicsLayout', 'QGraphicsAnchorLayout', 'QGraphicsBlurEffect', 'QGraphicsColorizeEffect', 'QGraphicsDropShadowEffect', 'QGraphicsEllipseItem', 'QGraphicsGridLayout', 'QGraphicsItemGroup', 'QGraphicsLineItem', 'QGraphicsLinearLayout', 'QGraphicsObject', 'QGraphicsOpacityEffect', 'QGraphicsPathItem', 'QGraphicsPixmapItem', 'QGraphicsPolygonItem', 'QGraphicsWidget', 'QGraphicsWidget', 'QGraphicsProxyWidget', 'QGraphicsRectItem', 'QGraphicsRotation', 'QGraphicsScale', 'QGraphicsSceneContextMenuEvent', 'QGraphicsSceneDragDropEvent', 'QGraphicsSceneHelpEvent', 'QGraphicsSceneHoverEvent', 'QGraphicsSceneMouseEvent', 'QGraphicsSceneMoveEvent', 'QGraphicsSceneResizeEvent', 'QGraphicsSceneWheelEvent', 'QGraphicsSimpleTextItem', 'QGraphicsTextItem', 'QGraphicsView', 'QGridLayout', 'QGroupBox', 'QHBoxLayout', 'QHeaderView', 'QInputDialog', 'QItemDelegate', 'QKeySequenceEdit', 'QLCDNumber', 'QLabel', 'QLineEdit', 'QListView', 'QListWidget', 'QMacCocoaViewContainer', 'QMainWindow', 'QMdiArea', 'QMdiSubWindow', 'QMenu', 'QMenuBar', 'QMessageBox', 'QOpenGLWidget', 'QPanGesture', 'QPinchGesture', 'QPlainTextEdit', 'QProgressBar', 'QProgressDialog', 'QProxyStyle', 'QRadioButton', 'QRubberBand', 'QScrollArea', 'QScrollBar', 'QSizeGrip', 'QSlider', 'QSpacerItem', 'QSpinBox', 'QSplashScreen', 'QSplitter', 'QSplitterHandle', 'QStackedLayout', 'QStackedWidget', 'QStatusBar', 'QStyleHintReturnMask', 'QStyleHintReturnVariant', 'QStyleOptionButton', 'QStyleOptionComplex', 'QStyleOptionComboBox', 'QStyleOptionDockWidget', 'QStyleOptionFocusRect', 'QStyleOptionFrame', 'QStyleOptionGraphicsItem', 'QStyleOptionGroupBox', 'QStyleOptionHeader', 'QStyleOptionMenuItem', 'QStyleOptionProgressBar', 'QStyleOptionRubberBand', 'QStyleOptionSizeGrip', 'QStyleOptionSlider', 'QStyleOptionSpinBox', 'QStyleOptionTab', 'QStyleOptionTabBarBase', 'QStyleOptionTabV4', 'QStyleOptionTabWidgetFrame', 'QStyleOptionTitleBar', 'QStyleOptionToolBar', 'QStyleOptionToolBox', 'QStyleOptionToolButton', 'QStyleOptionViewItem', 'QStyledItemDelegate', 'QSwipeGesture', 'QTabBar', 'QTabWidget', 'QTableView', 'QTableWidget', 'QTapAndHoldGesture', 'QTapGesture', 'QTextEdit', 'QTextBrowser', 'QTimeEdit', 'QToolBar', 'QToolBox', 'QToolButton', 'QTreeView', 'QTreeWidget', 'QUndoView', 'QVBoxLayout', 'QWidgetAction', 'QWidgetItem', 'QWizard', 'QWizardPage'], 'PyQt5.QtNetwork': ['QNetworkDiskCache', 'QTcpSocket', 'QSslSocket', 'QUdpSocket'], 'PyQt5.QtPrintSupport': ['QPrintDialog'], 'PyQt5.QtSql': ['QSqlIndex', 'QSqlTableModel', 'QSqlRelationalTableModel'], 'PyQt5.QtXml': ['QDomAttr', 'QDomCharacterData', 'QDomText', 'QDomCDATASection', 'QDomComment', 'QDomDocument', 'QDomDocumentFragment', 'QDomDocumentType', 'QDomElement', 'QDomEntity', 'QDomEntityReference', 'QDomNotation', 'QDomProcessingInstruction', 'QXmlDefaultHandler', 'QXmlDefaultHandler', 'QXmlDefaultHandler', 'QXmlDefaultHandler', 'QXmlDefaultHandler', 'QXmlDefaultHandler', 'QXmlSimpleReader']}
+
 
 
 # Create a dictionary to store module-subclass mappings
@@ -629,26 +637,27 @@ for module, subclasses in qt_module_subclasses.items():
 `;
 }
 function gatherQtAPIModuleName(cls) {
-    // Python code to execute
-    const pythonCode = getModulePythonScript();
-    // Arguments to pass to Python code
-    const args = [cls];
-    // Execute Python code using child process
-    let cmd = `/Library/Frameworks/Python.framework/Versions/3.12/bin/python3 -c "${pythonCode}" ${args.map(arg => `"${args}"`).join(' ')}`;
-    //console.log('cmd: ', cmd);
-    (0, child_process_1.exec)(cmd, (error, stdout, stderr) => {
-        if (error) {
-            //console.error(`Error executing Python: ${error.message}`);
-            return;
-        }
-        if (stderr) {
-            //console.error(`Python error: ${stderr}`);
-            return;
-        }
-        console.log(`cls ${cls} : module : ${stdout}`);
-        //syncWriteFile(join(getFileSaveLocation(true), 'class_' + cls + '.txt'), stdout, 'w');
-        //console.log(`Python output for cls : ${cls} : ${stdout} written to file.`);
-    });
+    return findModuleByClass(cls);
+    // // Python code to execute
+    // const pythonCode = getModulePythonScript();
+    // // Arguments to pass to Python code
+    // const args = [cls];
+    // // Execute Python code using child process
+    // let cmd  = `/Library/Frameworks/Python.framework/Versions/3.12/bin/python3 -c "${pythonCode}" ${args.map(arg => `"${args}"`).join(' ')}`;
+    // //console.log('cmd: ', cmd);
+    // exec(cmd, (error, stdout, stderr) => {
+    //     if (error) {
+    //         //console.error(`Error executing Python: ${error.message}`);
+    //         return;
+    //     }
+    //     if (stderr) {
+    //         //console.error(`Python error: ${stderr}`);
+    //         return;
+    //     }
+    //     console.log(`cls ${cls} : module : ${stdout}`);
+    //     //syncWriteFile(join(getFileSaveLocation(true), 'class_' + cls + '.txt'), stdout, 'w');
+    //     //console.log(`Python output for cls : ${cls} : ${stdout} written to file.`);
+    // });
 }
 // This method is called when your extension is deactivated
 function deactivate() { }
