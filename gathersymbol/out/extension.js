@@ -39,19 +39,20 @@ async function getFunctionList(uri) {
         }, 1000);
     });
 }
-function syncWriteFile(filename, data) {
+function syncWriteFile(filename, data, mode = 'a+') {
     /**
      * flags:
      *  - w = Open file for reading and writing. File is created if not exists
      *  - a+ = Open file for reading and appending. The file is created if not exists
      */
     fs.writeFileSync(filename, data, {
-        flag: 'a+',
+        flag: mode,
     });
     //const contents = readFileSync(filename, 'utf-8');
     //return contents;
 }
 function readSymbolsRecursivlyFromHeader(headerfile, symbol, srcSymbols, srcfiles, clsObject, clsname) {
+    let containersMap = new Map();
     if (symbol.kind === vscode.SymbolKind.Class) {
         const data = readInheritance(headerfile).toString();
         const lines = data.toString().split("\n");
@@ -65,14 +66,32 @@ function readSymbolsRecursivlyFromHeader(headerfile, symbol, srcSymbols, srcfile
         clsname = symbol.name;
         if (!clsObject.has(symbol.name)) {
             let basecls = "Global";
+            let fillcolor = "#FFFFFF";
+            let module = "Core";
             if (map.has(clsname)) {
                 basecls = map.get(clsname);
-                console.log(`classname : ${clsname} base: ${basecls}`);
+                if (basecls.startsWith('Q')) {
+                    gatherQtAPIModuleName(clsname);
+                    const sleepTime = 5000;
+                    const startTime = Date.now();
+                    let currentTime = startTime;
+                    while (currentTime - startTime < sleepTime) {
+                        currentTime = Date.now();
+                    }
+                    if (fs.existsSync((0, path_1.join)(getFileSaveLocation(true), 'class_' + clsname + '.txt'))) {
+                        module = fs.readFileSync((0, path_1.join)(getFileSaveLocation(true), 'class_' + clsname + '.txt')).toString();
+                        if (!module) {
+                            module = "Core";
+                        }
+                        //console.log(`module name for the class ${basecls} is ${module}`);
+                    }
+                    fillcolor = "#FF0000";
+                }
                 if (!basecls || (basecls.trim().length === 0) || basecls.startsWith('Q')) {
                     basecls = "Global";
                 }
             }
-            var object = { uuid: (0, uuid_1.v4)(), name: clsname, attribs: new Map(), funcs: new Map(), base: basecls };
+            var object = { uuid: (0, uuid_1.v4)(), name: clsname, attribs: new Map(), funcs: new Map(), base: basecls, fillColor: fillcolor, module: module, childerens: [] };
             clsObject.set(clsname, object);
         }
     }
@@ -306,8 +325,37 @@ function readInheritance(file) {
     return (0, child_process_1.execSync)(cmd);
     //console.log(executeCommand(cmd));
 }
+// Function to recursively read header file symbols and extract class inheritance
+async function readHeaderSymbols(headerFiles) {
+    const classMap = new Map();
+    // Recursive function to process document symbols
+    async function processSymbols(uri, baseClass = null) {
+        const symbols = await vscode.commands.executeCommand('vscode.executeDocumentSymbolProvider', uri);
+        if (symbols) {
+            for (const symbol of symbols) {
+                if (symbol.kind === vscode.SymbolKind.Class) {
+                    // Extract class name
+                    const className = symbol.name;
+                    // Update class map with inheritance relationship
+                    if (baseClass) {
+                        if (!classMap.has(baseClass)) {
+                            classMap.set(baseClass, []);
+                        }
+                        classMap.get(baseClass).push(className);
+                    }
+                    // Recursively process children symbols
+                    await processSymbols(uri, className);
+                }
+            }
+        }
+    }
+    // Iterate over each header file
+    for (const headerFile of headerFiles) {
+        await processSymbols(headerFile);
+    }
+    return classMap;
+}
 function readSymbols(headerfile, srcfile, symbolsFromHeader, symbolsFromSource, srcfiles, fileObjMap) {
-    //console.log(`readSymbols : source file : ${srcfile}`);
     const clsObjectMap = new Map();
     if (symbolsFromHeader) {
         for (const Symbol of symbolsFromHeader) {
@@ -319,65 +367,77 @@ function readSymbols(headerfile, srcfile, symbolsFromHeader, symbolsFromSource, 
     }
 }
 function appendClassXmlDataHeader(fileObjMap, path, xmlConnections) {
-    console.log("started executing appendClassXmlDataHeader ....");
+    //console.log("started executing appendClassXmlDataHeader ....");
     let classHierarchyMap = new Map();
+    let containersMap = new Map();
+    let visited = new Map();
     let data = "";
-    fileObjMap.forEach((clsObjMap, filePath) => {
-        clsObjMap.forEach((clsInterfaceObj, className) => {
-            if (!classHierarchyMap.has(clsInterfaceObj.base)) {
-                classHierarchyMap.set(clsInterfaceObj.base, [clsInterfaceObj]);
-            }
-            else {
-                classHierarchyMap.get(clsInterfaceObj.base)?.push(clsInterfaceObj);
-            }
-        });
-    });
     let nodeXPos = 0;
     const textNodeHeight = 35;
     let maxAttribCount = -1;
-    if (classHierarchyMap.has("Global")) {
-        let baseClassInterfaceArray = classHierarchyMap.get("Global");
-        for (const baseClassInterfaceObj of baseClassInterfaceArray) {
-            let nodeYPos = 50;
-            console.log(`Base: ${baseClassInterfaceObj.name}`);
-            console.log(`Base Node y pos: ${nodeYPos}`);
-            const attribCounts = appendClassXmlDataHeaderUtil(baseClassInterfaceObj, fileObjMap, path, baseClassInterfaceObj.uuid, nodeXPos, nodeYPos);
-            if (classHierarchyMap.has(baseClassInterfaceObj.name)) {
-                let derivedClasses = classHierarchyMap.get(baseClassInterfaceObj.name);
-                nodeYPos = nodeYPos + (attribCounts * textNodeHeight);
-                nodeYPos = nodeYPos < 0 ? -nodeXPos : nodeYPos;
-                if (derivedClasses.length) {
-                    for (const derived of derivedClasses) {
-                        //set the y pos of derived class below the base class
-                        appendClassXmlDataHeaderUtil(derived, fileObjMap, path, baseClassInterfaceObj.uuid, nodeXPos, nodeYPos);
-                        xmlConnections.push(createBaseDerivedConnectionXml(derived.uuid, baseClassInterfaceObj.uuid, nodeXPos, nodeYPos, textNodeHeight, maxAttribCount));
-                        nodeXPos = nodeXPos + 350;
-                    }
-                }
-                else {
-                    nodeXPos = nodeXPos + 350;
-                }
+    fileObjMap.forEach((clsObjMap, filePath) => {
+        clsObjMap.forEach((clsInterfaceObj, className) => {
+            if (!classHierarchyMap.has(clsInterfaceObj.module)) {
+                classHierarchyMap.set(clsInterfaceObj.module, [clsInterfaceObj]);
             }
             else {
-                nodeXPos = nodeXPos + 350;
+                classHierarchyMap.get(clsInterfaceObj.module)?.push(clsInterfaceObj);
             }
+        });
+    });
+    console.log(`number of modules: ${Object.keys(classHierarchyMap).length}`);
+    classHierarchyMap.forEach((classInterfaceArray, module) => {
+        let containerXPos = 50;
+        let containerYPos = 50;
+        let xOffset = 100;
+        let yOffset = 100;
+        let cellWidth = 300;
+        let cellHeight = 300;
+        let x = xOffset;
+        let y = yOffset;
+        let x_containerOffset = 100;
+        let y_containerOffset = 100;
+        let numRows = Math.ceil(Math.sqrt(classInterfaceArray.length)); // Round up to ensure all items fit
+        let numCols = Math.ceil(classInterfaceArray.length / numRows);
+        let classBlocks = [];
+        console.log(`####processing module: ${module}####`);
+        let containerUUID = (0, uuid_1.v4)();
+        let row = 0;
+        let col = 0;
+        for (const classInterfaceObj of classInterfaceArray) {
+            console.log(`####processing class: ${classInterfaceObj.name} with module : ${classInterfaceObj.module}####`);
+            let child_x = x + (col * (cellWidth + xOffset));
+            let child_y = y + (row * (cellHeight + yOffset));
+            let data = appendClassXmlDataHeaderUtil(classInterfaceObj, fileObjMap, path, child_x, child_y, containerUUID);
+            col = col + 1;
+            if (col > numCols) {
+                col = 0;
+                row = row + 1;
+            }
+            classBlocks.push(data.xml);
         }
-    }
+        syncWriteFile(path, getContainerXml(module, containerUUID, containerXPos, containerYPos, (numCols * cellWidth) + x_containerOffset, (numRows * cellHeight) + y_containerOffset));
+        containerXPos = containerXPos + 100;
+        for (const xml of classBlocks) {
+            syncWriteFile(path, xml);
+        }
+    });
 }
-function appendClassXmlDataHeaderUtil(clsInterfaceObj, fileObjMap, path, baseUUID, nodeXPos, nodeYPos) {
+function appendClassXmlDataHeaderUtil(clsInterfaceObj, fileObjMap, path, nodex, nodey, puuid) {
     try {
         let modifiers = new Map([
             ['private', '-'],
             ['protected', '#'],
             ['declaration', '+']
         ]);
-        let y = 26;
-        const childYIncrPos = 26;
+        let y_offset = 26;
         const textNodeHeight = 35;
         let attribCounts = 0;
         let xmlChildContent = "";
         let xmlClassContent = "";
         let units = 7;
+        let y = y_offset;
+        let classModuleMap = new Map();
         clsInterfaceObj.funcs.forEach(async (value, functionName) => {
             const formattedValue = formatValueToXml(functionName);
             let data = "";
@@ -391,19 +451,19 @@ function appendClassXmlDataHeaderUtil(clsInterfaceObj, fileObjMap, path, baseUUI
             const foundAtLines = getConnectionXml(clsInterfaceObj.name, fname, value[3], fileObjMap, path);
             let fontColor = "";
             if (foundAtLines === 0) {
-                console.log(`api : ${fname} found count : ${foundAtLines}`);
                 fontColor = "#FF0000";
             }
             xmlChildContent = xmlChildContent + createXmlTextNode(value[3], clsInterfaceObj.uuid, data, y, data.length * units, textNodeHeight, fontColor);
-            y = y + childYIncrPos;
+            y = y + y_offset;
             attribCounts = attribCounts + 1;
         });
-        let h = childYIncrPos * (attribCounts + 1);
+        let h = y_offset * (attribCounts + 1);
         let valueFormatted = formatValueToXml(clsInterfaceObj.name);
-        xmlClassContent = xmlClassContent + createXmlListNode(clsInterfaceObj.uuid, valueFormatted, nodeXPos, nodeYPos, 300, h);
+        xmlClassContent = xmlClassContent + createXmlListNode(clsInterfaceObj, valueFormatted, nodex, nodey, 300, h, puuid);
         xmlClassContent = xmlClassContent + xmlChildContent;
-        syncWriteFile(path, xmlClassContent); // Writing content to file
-        return attribCounts;
+        //syncWriteFile(path, xmlClassContent); // Writing content to file
+        let data = { xml: xmlClassContent, attribCount: attribCounts };
+        return data;
     }
     catch (error) {
         console.error('Error appending class XML data:', error);
@@ -437,10 +497,15 @@ function createXmlTextNode(uuid, parentuuid, data, ypos, width, height, fontColo
                 <mxGeometry y="${ypos}" width="${width}" height="${height}" as="geometry"/>
                 </mxCell>`;
 }
-function createXmlListNode(uuid, data, xpos, ypos, width, height) {
-    return `\n<mxCell id ="${uuid}" value="${data}" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;" vertex="1" parent="1">
+function createXmlListNode(obj, data, xpos, ypos, width, height, container) {
+    return `\n<mxCell id ="${obj.uuid}" value="${data}" style="swimlane;fontStyle=1;fillColor=${obj.fillColor};childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;" vertex="1" parent="${container}">
                     <mxGeometry x="${xpos}" y="${ypos}" width="${width}" height="${height}" as="geometry"/>
                     </mxCell>`;
+}
+function getContainerXml(name, uuid, xpos, ypos, width, height) {
+    return `\n<mxCell id= "${uuid}" value="${name}" style="swimlane:startsize=0;" vertex="1" parent="1">
+            <mxGeometry x="${xpos}" y="${ypos}" width="${width}" height="${height}" as="geometry"/>
+            </mxCell>`;
 }
 // Function to find pairs of similar file names
 function findSimilarPairs(headerFiles, sourceFiles) {
@@ -475,7 +540,7 @@ function activate(context) {
         const headerfiles = await vscode.workspace.findFiles('**/*.h');
         const sourcefiles = await vscode.workspace.findFiles('**/*.cpp');
         const pythonfiles = await vscode.workspace.findFiles('**/*.py');
-        console.log(`python files: ${pythonfiles}`);
+        //console.log(`python files: ${pythonfiles}`);
         const header_source_pair = findSimilarPairs(headerfiles, sourcefiles);
         //console.log(`pair: ${header_source_pair}`);
         let xmlFooterContent = ` 
@@ -491,9 +556,12 @@ function activate(context) {
             const filePath = document.fileName;
             const fileNameWithoutExtension = (0, path_1.basename)(filePath, (0, path_1.extname)(filePath));
             const fileWithoutSlotsKey = ReplaceQtSlots(document, getFileSaveLocation());
-            console.log(getFunctionList(fileWithoutSlotsKey));
+            // console.log(getFunctionList(fileWithoutSlotsKey));
             const symbolsPromiseFromHeaders = await getFunctionList(fileWithoutSlotsKey);
             const symbolsPromiseFromSource = await getFunctionList(pair[1]);
+            readHeaderSymbols(headerfiles).then(clssInheritanceMap => {
+                console.log(clssInheritanceMap);
+            });
             readSymbols(pair[0].path, pair[1].path, symbolsPromiseFromHeaders, symbolsPromiseFromSource, sourcefiles, fileObjMap);
             //Check if the file exists
             if (fs.existsSync((fileWithoutSlotsKey).path)) {
@@ -505,11 +573,12 @@ function activate(context) {
                 //console.log('File does not exist.');
             }
         }
-        for (const file of pythonfiles) {
-            const document = await vscode.workspace.openTextDocument(file);
-            const symbols = await getFunctionList(document.uri);
-            readSymbols(document.uri.path, document.uri.path, symbols, symbols, sourcefiles, fileObjMap);
-        }
+        // for( const file of pythonfiles)
+        // {
+        //     const document                  = await vscode.workspace.openTextDocument(file);
+        //     const symbols = await getFunctionList(document.uri) as vscode.DocumentSymbol[];
+        //     readSymbols(document.uri.path, document.uri.path, symbols as vscode.DocumentSymbol[], symbols as vscode.DocumentSymbol[], sourcefiles, fileObjMap);
+        // }
         syncWriteFile(pathtosave, getXmlHeaderContent());
         appendClassXmlDataHeader(fileObjMap, pathtosave, xmlConnections);
         for (const xml of xmlConnections) {
@@ -520,6 +589,67 @@ function activate(context) {
     context.subscriptions.push(disposable);
 }
 exports.activate = activate;
+function getModulePythonScript() {
+    return `
+import inspect
+import sys
+
+from PyQt5 import QtCore, QtWidgets, QtNetwork, QtPrintSupport, QtSql, QtSvg, QtXml
+
+
+# Create a dictionary to store module-subclass mappings
+qt_module_subclasses = {}
+# Function to recursively get all subclasses of a module
+def get_subclasses(module):
+    for name, obj in module.__dict__.items():
+        if inspect.isclass(obj) and obj.__module__ == module.__name__:
+            # Check if the module name is a key in the dictionary
+            qt_module_subclasses.setdefault(module.__name__, []).append(name)
+            get_subclasses(obj)
+    
+# Get subclasses for each Qt module
+for module_name in ['PyQt5.QtCore', 'PyQt5.QtWidgets', 'QtNetwork', 'QtPrintSupport', 'QtSql', 'QtSvg', 'QtWebKit', 'QtXml']:
+    module = globals().get(module_name)
+    if module:
+        get_subclasses(module)
+
+args = sys.argv[1:]
+    
+# Print the dictionary
+for module, subclasses in qt_module_subclasses.items():
+    for subclass in subclasses:
+        if args[0] == subclass:
+            f = f.open(os.path.join("/Users/deepakthapliyal/Workspace/drawio/temp", cls + '.txt')
+            f.write(module)
+            f.close()
+            
+            print (module, file=sys.stdout)
+            break
+            
+`;
+}
+function gatherQtAPIModuleName(cls) {
+    // Python code to execute
+    const pythonCode = getModulePythonScript();
+    // Arguments to pass to Python code
+    const args = [cls];
+    // Execute Python code using child process
+    let cmd = `/Library/Frameworks/Python.framework/Versions/3.12/bin/python3 -c "${pythonCode}" ${args.map(arg => `"${args}"`).join(' ')}`;
+    //console.log('cmd: ', cmd);
+    (0, child_process_1.exec)(cmd, (error, stdout, stderr) => {
+        if (error) {
+            //console.error(`Error executing Python: ${error.message}`);
+            return;
+        }
+        if (stderr) {
+            //console.error(`Python error: ${stderr}`);
+            return;
+        }
+        console.log(`cls ${cls} : module : ${stdout}`);
+        //syncWriteFile(join(getFileSaveLocation(true), 'class_' + cls + '.txt'), stdout, 'w');
+        //console.log(`Python output for cls : ${cls} : ${stdout} written to file.`);
+    });
+}
 // This method is called when your extension is deactivated
 function deactivate() { }
 exports.deactivate = deactivate;
