@@ -39,15 +39,12 @@ pyQt5Data.set('PyQt5.QtPrintSupport', ['QPrintDialog']);
 pyQt5Data.set('PyQt5.QtSql', ['QSqlIndex', 'QSqlTableModel', 'QSqlRelationalTableModel']);
 pyQt5Data.set('PyQt5.QtXml', ['QDomAttr', 'QDomCharacterData', 'QDomText', 'QDomCDATASection', 'QDomComment', 'QDomDocument', 'QDomDocumentFragment', 'QDomDocumentType', 'QDomElement', 'QDomEntity', 'QDomEntityReference', 'QDomNotation', 'QDomProcessingInstruction', 'QXmlDefaultHandler', 'QXmlDefaultHandler', 'QXmlDefaultHandler', 'QXmlDefaultHandler', 'QXmlDefaultHandler', 'QXmlDefaultHandler', 'QXmlSimpleReader']);
 function findModuleByClass(className) {
-    for (const moduleName in pyQt5Data) {
-        if (pyQt5Data.hasOwnProperty(moduleName)) {
-            const classes = pyQt5Data.get(moduleName);
-            if (classes.includes(className)) {
-                return moduleName;
-            }
+    pyQt5Data.forEach((value, key) => {
+        if (value.includes(className)) {
+            return key;
         }
-    }
-    return undefined;
+    });
+    return "Core";
 }
 // Async function to fetch employee data
 async function getFunctionList(uri) {
@@ -89,8 +86,8 @@ function readSymbolsRecursivlyFromHeader(headerfile, symbol, srcSymbols, srcfile
             if (map.has(clsname)) {
                 basecls = map.get(clsname);
                 if (basecls.startsWith('Q')) {
-                    module = gatherQtAPIModuleName(clsname);
-                    console.log(`cls name ${clsname} module ${module}`);
+                    module = gatherQtAPIModuleName(basecls);
+                    console.log(`cls name ${basecls} module ${module}`);
                     fillcolor = "#FF0000";
                 }
                 if (!basecls || (basecls.trim().length === 0) || basecls.startsWith('Q')) {

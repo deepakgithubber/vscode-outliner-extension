@@ -52,15 +52,14 @@ pyQt5Data.set('PyQt5.QtXml',['QDomAttr', 'QDomCharacterData', 'QDomText', 'QDomC
 
 
 function findModuleByClass(className: string): string | undefined {
-    for (const moduleName in pyQt5Data) {
-        if (pyQt5Data.hasOwnProperty(moduleName)) {
-            const classes = pyQt5Data.get(moduleName) as string[];
-            if (classes.includes(className)) {
-                return moduleName;
-            }
+
+    pyQt5Data.forEach((value, key) =>{
+        if (value.includes(className)) {
+            return key;
         }
-    }
-    return undefined;
+    });
+
+    return "Core";
 }
 
 // Async function to fetch employee data
@@ -119,8 +118,8 @@ function readSymbolsRecursivlyFromHeader(headerfile: string, symbol: vscode.Docu
                 basecls = map.get(clsname) as string;
                 if(basecls.startsWith('Q'))
                 {
-                    module = gatherQtAPIModuleName(clsname) as string;
-                    console.log(`cls name ${clsname} module ${module}`);
+                    module = gatherQtAPIModuleName(basecls) as string;
+                    console.log(`cls name ${basecls} module ${module}`);
                     fillcolor="#FF0000";
                     
                 }
